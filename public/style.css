@@ -1,33 +1,21 @@
 /* MikDrop - giao diện lấy cảm hứng từ AirDrop. Không phụ thuộc CDN để chạy được khi LAN không có Internet. */
 :root {
-  --bg1: #f4f7ff;
-  --bg2: #e3eafc;
-  --card: rgba(255, 255, 255, 0.78);
-  --card-solid: #ffffff;
-  --text: #0f1626;
-  --muted: #667089;
-  --line: rgba(15, 22, 38, 0.09);
-  --accent: #0a84ff;
-  --accent2: #5e5ce6;
-  --ok: #30b95c;
+  color-scheme: dark;
+  --bg1: #0a0a0b;
+  --bg2: #1c1008;
+  --card: rgba(26, 24, 23, 0.8);
+  --card-solid: #171514;
+  --text: #fff4ec;
+  --muted: #a1958b;
+  --line: rgba(255, 255, 255, 0.1);
+  --accent: #ff7a2b;
+  --accent2: #f4380f;
+  --ok: #34c759;
   --danger: #ff453a;
-  --shadow: 0 12px 34px rgba(30, 50, 110, 0.14);
-  --ring: rgba(10, 132, 255, 0.18);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.55);
+  --ring: rgba(255, 106, 31, 0.24);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg1: #0b0e17;
-    --bg2: #111830;
-    --card: rgba(30, 37, 58, 0.78);
-    --card-solid: #1b2136;
-    --text: #f2f5ff;
-    --muted: #8c95ad;
-    --line: rgba(255, 255, 255, 0.1);
-    --shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
-    --ring: rgba(10, 132, 255, 0.28);
-  }
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -56,12 +44,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand { display: flex; align-items: center; gap: 10px; }
-.logo {
-  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: #fff;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  box-shadow: 0 6px 16px rgba(10, 132, 255, 0.35);
-}
-.logo svg { width: 20px; height: 20px; stroke-width: 2.2; }
+.logo { width: 40px; height: 32px; display: block; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(255, 106, 31, 0.35)); }
 .brand-name { font-weight: 700; font-size: 20px; letter-spacing: -0.02em; }
 
 .status {
@@ -76,7 +59,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .banner {
   margin-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 14px; border-radius: 14px; font-size: 14px;
-  background: linear-gradient(135deg, rgba(10, 132, 255, 0.14), rgba(94, 92, 230, 0.14));
+  background: linear-gradient(135deg, rgba(255, 106, 31, 0.14), rgba(244, 56, 15, 0.14));
   border: 1px solid var(--ring);
 }
 .link { color: var(--accent); font-weight: 600; padding: 4px 2px; }
@@ -118,7 +101,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .me svg { width: 34px; height: 34px; }
 
 .peer {
-  position: absolute; width: 96px; margin-left: -48px; margin-top: -42px; text-align: center;
+  position: absolute; width: 116px; margin-left: -58px; margin-top: -42px; text-align: center;
   display: flex; flex-direction: column; align-items: center; gap: 7px;
   animation: pop 0.45s cubic-bezier(0.2, 1.3, 0.4, 1) both; transition: transform 0.15s;
 }
@@ -127,13 +110,13 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .avatar {
   width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none;
   background: linear-gradient(145deg, var(--accent), var(--accent2));
-  box-shadow: 0 8px 20px rgba(10, 132, 255, 0.35); transition: box-shadow 0.2s, transform 0.2s;
+  box-shadow: 0 8px 20px rgba(255, 106, 31, 0.35); transition: box-shadow 0.2s, transform 0.2s;
 }
 .avatar svg { width: 30px; height: 30px; }
 .avatar.big { width: 76px; height: 76px; margin: 0 auto 12px; }
 .avatar.big svg { width: 36px; height: 36px; }
 .peer:hover .avatar { transform: scale(1.06); }
-.peer.drop .avatar { transform: scale(1.18); box-shadow: 0 0 0 7px var(--ring), 0 10px 24px rgba(10, 132, 255, 0.5); }
+.peer.drop .avatar { transform: scale(1.18); box-shadow: 0 0 0 7px var(--ring), 0 10px 24px rgba(255, 106, 31, 0.5); }
 .peer .name {
   font-size: 13px; font-weight: 600; line-height: 1.2; max-width: 100%; padding: 3px 8px; border-radius: 10px;
   background: var(--card); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
@@ -158,7 +141,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .card-row { display: flex; align-items: center; gap: 12px; }
 .dir {
   width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none;
-  background: rgba(10, 132, 255, 0.14); color: var(--accent);
+  background: rgba(255, 106, 31, 0.14); color: var(--accent);
 }
 .dir svg { width: 18px; height: 18px; stroke-width: 2.2; }
 .card.done .dir { background: rgba(48, 185, 92, 0.16); color: var(--ok); }
@@ -203,7 +186,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
   background: var(--line); transition: transform 0.1s, opacity 0.15s;
 }
 .btn:active { transform: scale(0.97); }
-.btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; box-shadow: 0 8px 20px rgba(10, 132, 255, 0.35); }
+.btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; box-shadow: 0 8px 20px rgba(255, 106, 31, 0.35); }
 .btn.primary:disabled { opacity: 0.4; box-shadow: none; cursor: not-allowed; }
 .btn.small { min-height: 38px; font-size: 14px; padding: 0 16px; }
 .actions { display: flex; gap: 10px; margin-top: 18px; }
@@ -277,7 +260,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 /* ---------- Kéo thả, thông báo ---------- */
 .dropveil {
   position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; pointer-events: none;
-  background: rgba(10, 132, 255, 0.12); border: 3px dashed var(--accent); margin: 10px; border-radius: 28px;
+  background: rgba(255, 106, 31, 0.12); border: 3px dashed var(--accent); margin: 10px; border-radius: 28px;
   inset: 0;
 }
 .dropveil div { padding: 14px 24px; border-radius: 99px; background: var(--card-solid); font-weight: 600; box-shadow: var(--shadow); }
@@ -292,7 +275,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .toast.err { background: rgba(214, 48, 40, 0.95); }
 
 @media (max-width: 480px) {
-  .peer { width: 88px; margin-left: -44px; }
+  .peer { width: 104px; margin-left: -52px; }
   .avatar { width: 58px; height: 58px; }
   .me { width: 68px; height: 68px; margin: -34px 0 0 -34px; }
 }
