@@ -10,6 +10,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>MikDrop</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -45,6 +47,10 @@
       <button class="whoami" id="whoami" type="button" title="Đổi tên thiết bị">
         Bạn hiển thị là <b id="my-name"></b>
         <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z"/></svg>
+      </button>
+      <button class="whoami" id="roombtn" type="button" title="Kết nối thiết bị ở mạng khác bằng mã phòng">
+        <span id="room-label">Cùng mạng Wi-Fi</span>
+        <svg viewBox="0 0 24 24"><path d="M9.5 14.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14.5 9.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
       </button>
     </footer>
   </div>
@@ -106,6 +112,23 @@
       <div class="actions">
         <button class="btn" id="rename-cancel" type="button">Huỷ</button>
         <button class="btn primary" type="submit">Lưu</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Mã phòng -->
+  <div class="overlay center" id="room" hidden>
+    <form class="dialog small" id="room-form" autocomplete="off">
+      <h2>Kết nối thiết bị</h2>
+      <p class="muted">Mặc định MikDrop tự tìm các thiết bị cùng mạng Wi-Fi với bạn. Nếu thiết bị ở mạng khác, hoặc không thấy nhau, hãy nhập chung một mã phòng.</p>
+      <input id="room-input" maxlength="24" placeholder="Mã phòng, ví dụ: nha-an-123" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div class="room-tools">
+        <button class="link" id="room-random" type="button">Tạo mã ngẫu nhiên</button>
+        <button class="link" id="room-invite" type="button">Gửi liên kết mời</button>
+      </div>
+      <div class="actions">
+        <button class="btn" id="room-auto" type="button">Tự động</button>
+        <button class="btn primary" type="submit">Vào phòng</button>
       </div>
     </form>
   </div>

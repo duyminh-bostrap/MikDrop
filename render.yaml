@@ -1,0 +1,16 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: mikdrop
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: TRUST_PROXY   # đứng sau proxy của Render: lấy IP thiết bị từ X-Forwarded-For
+        value: "1"
+      - key: NODE_VERSION
+        value: "22"
+      # - key: RELAY        # đặt "0" để tắt chế độ dự phòng, tiết kiệm băng thông
+      #   value: "0"

@@ -15,10 +15,14 @@ Chia sẻ ảnh và tệp ngang hàng (P2P) giữa iPhone, MacBook và Windows q
 MikDrop/
 ├── package.json
 ├── server.js          # Signaling server: phục vụ web + discovery + chuyển tiếp offer/answer/ICE
+├── render.yaml        # Cấu hình triển khai Render
+├── scripts/
+│   └── make-icons.js  # Tạo biểu tượng PNG cho PWA
 └── public/
     ├── index.html     # Giao diện
     ├── style.css      # CSS (viết tay, không cần Internet/CDN)
-    ├── app.js         # Logic client: radar, WebRTC, gửi/nhận, tiến trình
+    ├── app.js         # Logic client: radar, WebRTC, gửi/nhận, tiến trình, phòng
+    ├── manifest.webmanifest, icon-*.png, apple-touch-icon.png   # PWA
     └── favicon.svg
 ```
 
@@ -69,6 +73,38 @@ npm run start:https
 ```
 
 rồi mở `https://<IP>:3000` trên iPhone, chọn **Nâng cao → Tiếp tục truy cập** (chứng chỉ tự ký, lưu trong `.cert/`). Khi nhận tệp sẽ có nút **Lưu vào Ảnh / Tệp**. Nếu dùng HTTP thường, iPhone vẫn nhận được và lưu qua trình tải xuống của Safari (vào app Tệp).
+
+## Triển khai lên Internet (không cần bật PC)
+
+Server chỉ làm discovery và báo hiệu nên rất nhẹ, chạy tốt trên gói miễn phí. Khi đó bạn có một địa chỉ cố định (ví dụ `https://mikdrop.onrender.com`) và có HTTPS thật, nên iPhone có nút **Lưu vào Ảnh** mà không cần bỏ qua cảnh báo chứng chỉ.
+
+**Cách nhóm thiết bị:** các thiết bị có **cùng địa chỉ IP công cộng** (cùng nhà/Wi-Fi) tự thấy nhau. Thiết bị ở mạng khác nhau thì bấm *"Cùng mạng Wi-Fi"* ở cuối trang, nhập chung một **mã phòng** (hoặc gửi liên kết mời `/?room=<mã>`).
+
+### Render (khuyến nghị)
+
+1. Đăng nhập [render.com](https://render.com) bằng GitHub.
+2. **New → Blueprint** → chọn repo này. Render đọc `render.yaml` và tự cấu hình.
+3. Chờ build xong, mở địa chỉ `https://<tên>.onrender.com` trên các thiết bị.
+4. Trên iPhone: Safari → Chia sẻ → **Thêm vào Màn hình chính** để dùng như một app.
+
+Fly.io, Railway... cũng chạy được: đặt biến môi trường `TRUST_PROXY=1`, lệnh khởi động `npm start`.
+
+### Biến môi trường
+
+| Biến | Ý nghĩa |
+|---|---|
+| `PORT` | Cổng lắng nghe (nền tảng thường tự đặt) |
+| `TRUST_PROXY=1` | Bắt buộc khi đứng sau proxy: lấy IP thật từ `X-Forwarded-For` và tắt mDNS/QR |
+| `RELAY=0` | Tắt chế độ dự phòng qua server, tiết kiệm băng thông |
+| `MAX_PEERS_PER_ROOM` | Số thiết bị tối đa mỗi phòng (mặc định 50) |
+| `ICE_SERVERS` | JSON danh sách STUN/TURN, ví dụ `[{"urls":"stun:stun.l.google.com:19302"}]`. Thêm TURN nếu cần truyền qua mạng khó |
+
+### Lưu ý khi chạy công khai
+
+- Tệp vẫn đi P2P giữa hai thiết bị, nhưng ở **chế độ dự phòng** tệp đi qua server (chỉ trong RAM). Nếu không muốn tốn băng thông, đặt `RELAY=0`.
+- Gói miễn phí có thể "ngủ" khi không dùng, nên lần mở đầu có thể chờ vài giây.
+- Thiết bị dùng IPv4 và IPv6 khác nhau có thể không thấy nhau tự động. Khi đó hãy dùng mã phòng.
+- Ai biết mã phòng đều vào được phòng đó, nên hãy chọn mã khó đoán cho phòng riêng tư. Mọi lần nhận tệp vẫn cần người nhận bấm **Chấp nhận**.
 
 ## Xử lý sự cố
 

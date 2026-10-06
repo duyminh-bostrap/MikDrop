@@ -125,10 +125,29 @@
       kind === 'on' ? (n ? `${n} thiết bị gần đây` : 'Sẵn sàng') : kind === 'off' ? 'Mất kết nối, đang thử lại…' : 'Đang kết nối…';
   }
 
+  // Phòng: mặc định để trống = tự nhóm theo mạng. Có mã = chỉ thấy thiết bị cùng mã.
+  const urlRoom = new URLSearchParams(location.search).get('room');
+  if (urlRoom) {
+    store.set('mikdrop.room', urlRoom.trim().toLowerCase());
+    history.replaceState(null, '', location.pathname);
+  }
+  let myRoom = store.get('mikdrop.room') || '';
+
+  // Cấu hình ICE (STUN/TURN) do server cung cấp
+  let iceServers = [];
+  fetch('/api/config')
+    .then((r) => r.json())
+    .then((c) => { if (Array.isArray(c.iceServers)) iceServers = c.iceServers; })
+    .catch(() => {});
+
   socket.on('connect', () => {
-    socket.emit('join', { name: myName, type: device.type });
+    socket.emit('join', { name: myName, type: device.type, room: myRoom });
     setStatus('on');
   });
+  socket.on('room', ({ code }) => {
+    $('#room-label').textContent = code ? `Phòng: ${code}` : 'Cùng mạng Wi-Fi';
+  });
+  socket.on('join-error', ({ message }) => toast(message || 'Không vào được phòng.', true));
   socket.on('disconnect', () => {
     peers.clear();
     renderPeers();
@@ -414,7 +433,7 @@
 
   async function connectAsSender(t) {
     try {
-      const pc = new RTCPeerConnection({ iceServers: [] }); // mạng LAN: không cần STUN/TURN
+      const pc = new RTCPeerConnection({ iceServers });
       t.pc = pc;
       pc.onicecandidate = (e) => {
         if (e.candidate) socket.emit('signal', { to: t.peerId, transferId: t.id, candidate: e.candidate.toJSON() });
@@ -502,7 +521,13 @@
       socket.emit('relay', { to: t.peerId, transferId: t.id, kind, data }, (err) => {
         inflight--;
         inflightBytes -= bytes;
-        if (err) error = new Error(err === 'gone' ? 'Thiết bị đã ngắt kết nối' : 'Đường truyền dự phòng bị lỗi');
+        if (err) {
+          error = new Error(
+            err === 'gone' ? 'Thiết bị đã ngắt kết nối'
+              : err === 'disabled' ? 'Không kết nối trực tiếp được và máy chủ đã tắt chế độ dự phòng'
+                : 'Đường truyền dự phòng bị lỗi'
+          );
+        }
         const w = waiters.shift();
         if (w) w();
       });
@@ -670,7 +695,7 @@
   }
 
   function createReceiverPeer(t) {
-    const pc = new RTCPeerConnection({ iceServers: [] });
+    const pc = new RTCPeerConnection({ iceServers });
     t.pc = pc;
     pc.onicecandidate = (e) => {
       if (e.candidate) socket.emit('signal', { to: t.peerId, transferId: t.id, candidate: e.candidate.toJSON() });
@@ -963,9 +988,51 @@
     renameEl.hidden = true;
   });
 
+  // ------------------------------------------------------------------ Phòng
+  const roomEl = $('#room');
+  const roomInput = $('#room-input');
+  const randomCode = () => {
+    const words = ['nha', 'meo', 'cam', 'bien', 'sao', 'gio', 'mua', 'tra'];
+    return `${words[Math.floor(Math.random() * words.length)]}-${Math.random().toString(36).slice(2, 7)}`;
+  };
+  function joinRoom(code) {
+    myRoom = code;
+    store.set('mikdrop.room', code);
+    pending.length = 0;
+    socket.emit('join', { name: myName, type: device.type, room: myRoom });
+  }
+  $('#roombtn').addEventListener('click', () => {
+    roomInput.value = myRoom;
+    roomEl.hidden = false;
+  });
+  $('#room-random').addEventListener('click', () => { roomInput.value = randomCode(); });
+  $('#room-auto').addEventListener('click', () => { joinRoom(''); roomEl.hidden = true; });
+  roomEl.addEventListener('click', (e) => { if (e.target === roomEl) roomEl.hidden = true; });
+  $('#room-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const code = roomInput.value.trim().toLowerCase();
+    if (code && !/^[a-z0-9][a-z0-9-]{2,23}$/.test(code)) {
+      toast('Mã phòng gồm 3-24 ký tự: chữ không dấu, số và dấu gạch ngang.', true);
+      return;
+    }
+    joinRoom(code);
+    roomEl.hidden = true;
+  });
+  $('#room-invite').addEventListener('click', async () => {
+    if (!myRoom) { toast('Hãy nhập hoặc tạo mã phòng trước.'); return; }
+    const link = `${location.origin}/?room=${encodeURIComponent(myRoom)}`;
+    try {
+      if (navigator.share) await navigator.share({ title: 'MikDrop', text: 'Vào phòng MikDrop của tôi', url: link });
+      else { await navigator.clipboard.writeText(link); toast('Đã sao chép liên kết mời.'); }
+    } catch (err) {
+      if (!err || err.name !== 'AbortError') window.prompt('Sao chép liên kết này:', link);
+    }
+  });
+
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!renameEl.hidden) renameEl.hidden = true;
+    if (!roomEl.hidden) roomEl.hidden = true;
+    else if (!renameEl.hidden) renameEl.hidden = true;
     else if (!sheet.hidden) closeSheet();
   });
 
