@@ -196,7 +196,15 @@ const DEVICE_TYPES = new Set(['phone', 'tablet', 'laptop', 'desktop']);
 const peers = new Map(); // socket.id -> { id, name, type, room }
 
 const cleanName = (s) => String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40);
-const publicPeer = (p) => ({ id: p.id, name: p.name, type: p.type });
+const publicPeer = (p) => ({ id: p.id, name: p.name, type: p.type, host: p.host });
+
+// Thiết bị này có phải chính máy đang chạy server không (mở bằng localhost hoặc bằng IP LAN của máy)?
+// Chỉ có nghĩa khi chạy trong mạng nội bộ. Trên Internet (CLOUD) server không phải thiết bị của ai.
+function isServerHost(socket) {
+  if (CLOUD) return false;
+  const addr = String(socket.handshake.address || '').replace(/^::ffff:/i, '');
+  return /^(127\.|::1$)/.test(addr) || getLanInterfaces().some((i) => i.address === addr);
+}
 
 // --- Phòng: thiết bị chỉ thấy nhau khi cùng phòng --------------------------
 // Mặc định phòng được suy ra từ địa chỉ IP công cộng (cùng nhà/Wi-Fi => cùng IP => cùng phòng).
@@ -268,12 +276,13 @@ function attachSignaling(io) {
         room,
         name: cleanName(info && info.name) || 'Thiết bị',
         type: DEVICE_TYPES.has(info && info.type) ? info.type : 'desktop',
+        host: isServerHost(socket),
       };
       const isNew = !peers.has(socket.id);
       peers.set(socket.id, peer);
       socket.join(room);
 
-      socket.emit('room', { code: code || null });
+      socket.emit('room', { code: code || null, host: peer.host });
       socket.emit(
         'peers',
         [...peers.values()].filter((p) => p.room === room && p.id !== socket.id).map(publicPeer)

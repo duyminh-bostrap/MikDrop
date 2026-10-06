@@ -159,10 +159,17 @@ Fly.io, Railway... cũng chạy được: đặt biến môi trường `TRUST_PR
 
 ## Lưu ý kỹ thuật
 
-- Tệp nhận được gom trong RAM trước khi lưu, nên tệp rất lớn (vài GB) có thể gặp giới hạn bộ nhớ, đặc biệt trên iPhone.
+- **Tệp nặng (từ 200 MB):** nếu máy nhận dùng Chrome/Edge mở qua `localhost` hoặc HTTPS, MikDrop cho bạn chọn nơi lưu và **ghi thẳng ra ổ đĩa**, không tốn RAM nên gửi được tệp nhiều GB. Mở qua `http://<IP>` (không bảo mật) hoặc dùng Safari/Firefox thì tệp được giữ trong RAM đến khi nhận xong, nên tệp vài GB có thể hết bộ nhớ, đặc biệt trên iPhone.
 - iOS có thể tự chuyển HEIC thành JPEG khi chọn ảnh ở mục "Ảnh & video". Dùng mục **Tệp** để gửi bản gốc.
 - Giữ trang MikDrop mở (không khóa màn hình) trong lúc truyền.
 - Ứng dụng dành cho mạng nội bộ tin cậy. Đừng mở cổng ra Internet vì mọi thiết bị kết nối tới server đều thấy nhau.
+
+## Tốc độ
+
+- **Một đầu là máy chạy server** (ví dụ PC chạy `MikDrop.exe` gửi/nhận với iPhone): MikDrop tự chọn đường **qua WebSocket tới server nội bộ**. Trên loopback đo được khoảng 110 MB/s, nhanh gấp ~3,5 lần WebRTC vì không bị giới hạn CPU của SCTP, và không tốn thêm lượt truyền Wi-Fi. Thẻ hoạt động hiện "qua máy chủ nội bộ".
+- **Hai thiết bị khác** (ví dụ iPhone gửi sang Mac): đi **P2P trực tiếp bằng WebRTC**, khoảng 30-45 MB/s trên loopback.
+- Trên Wi-Fi thật, tốc độ bị giới hạn bởi Wi-Fi (băng tần 5 GHz/Wi-Fi 6, khoảng cách tới router, số thiết bị dùng chung). Dùng cáp mạng cho máy chạy server thì nhanh hơn. Số liệu trên là đo trên một máy, chưa đo giữa các thiết bị thật.
+- Trên Internet (bản Render), server không phải thiết bị của ai nên luôn đi P2P; đường qua server chỉ là dự phòng.
 
 ## Luồng kỹ thuật
 

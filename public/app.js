@@ -17,11 +17,18 @@
   }
 
   // ------------------------------------------------------------------ Hằng số
-  const CHUNK = 64 * 1024;            // mảnh gửi qua DataChannel (an toàn với mọi trình duyệt)
-  const RELAY_CHUNK = 256 * 1024;     // mảnh gửi qua server ở chế độ dự phòng
-  const RELAY_WINDOW = 6;             // số mảnh relay được phép "đang bay"
-  const HIGH_WATER = 4 * 1024 * 1024; // bufferedAmount tối đa trước khi chờ
-  const LOW_WATER = 1024 * 1024;
+  // Mảnh gửi qua DataChannel: lấy theo giới hạn thông điệp SCTP hai bên thoả thuận (Chrome/Safari: 256 KB).
+  // Mảnh lớn giảm số thông điệp phải xử lý. Không biết giới hạn thì dùng 64 KB cho an toàn.
+  const CHUNK_MAX = 256 * 1024;
+  const CHUNK_MIN = 16 * 1024;
+  const CHUNK_FALLBACK = 64 * 1024;
+  const READ_BLOCK = 8 * 1024 * 1024; // đọc tệp theo khối lớn và đọc trước khối kế tiếp trong lúc đang gửi
+  const RELAY_CHUNK = 256 * 1024;    // mảnh gửi qua server ở chế độ dự phòng
+  const RELAY_WINDOW = 8;             // số mảnh relay được phép "đang bay"
+  // Chrome từ chối send() khi hàng đợi vượt ~16 MB, nên giữ ngưỡng thấp hơn đáng kể
+  const HIGH_WATER = 8 * 1024 * 1024; // bufferedAmount tối đa trước khi chờ
+  const LOW_WATER = 2 * 1024 * 1024;
+  const STREAM_MIN = 200 * 1024 * 1024; // từ cỡ này trở lên, máy nhận (Chrome/Edge) ghi thẳng ra ổ đĩa thay vì giữ trong RAM
   const RTC_TIMEOUT = 9000;           // quá thời gian này chưa mở được kênh P2P -> dự phòng
   const RECV_TIMEOUT = 40000;         // người nhận chờ dữ liệu tối đa bao lâu
   const MAX_FILES = 2000;
@@ -141,16 +148,22 @@
 
   // Cấu hình ICE (STUN/TURN) do server cung cấp
   let iceServers = [];
+  let relayEnabled = true;
+  let iAmHost = false; // thiết bị này có phải chính máy chạy server (mạng nội bộ) không
   fetch('/api/config')
     .then((r) => r.json())
-    .then((c) => { if (Array.isArray(c.iceServers)) iceServers = c.iceServers; })
+    .then((c) => {
+      if (Array.isArray(c.iceServers)) iceServers = c.iceServers;
+      relayEnabled = c.relay !== false;
+    })
     .catch(() => {});
 
   socket.on('connect', () => {
     socket.emit('join', { name: myName, type: device.type, room: myRoom });
     setStatus('on');
   });
-  socket.on('room', ({ code }) => {
+  socket.on('room', ({ code, host }) => {
+    iAmHost = !!host;
     $('#room-label').textContent = code ? `Phòng: ${code}` : 'Cùng mạng Wi-Fi';
   });
   socket.on('join-error', ({ message }) => toast(message || 'Không vào được phòng.', true));
@@ -451,6 +464,14 @@
     if (!t || t.status !== 'waiting') return;
     t.status = 'connecting';
     upsertCard(t);
+    // Chạy trong mạng nội bộ và một đầu là chính máy chạy server (ví dụ PC chạy MikDrop.exe):
+    // gửi thẳng qua WebSocket tới server nhanh hơn WebRTC (không bị giới hạn CPU của SCTP) mà không tốn thêm
+    // lượt truyền Wi-Fi nào. Hai thiết bị khác thì vẫn đi P2P trực tiếp.
+    const peer = peers.get(t.peerId);
+    if (relayEnabled && (iAmHost || (peer && peer.host))) {
+      startRelay(t, true);
+      return;
+    }
     await connectAsSender(t);
   });
 
@@ -490,7 +511,7 @@
         if (t.mode !== 'rtc' || t.started) return;
         t.opened = true;
         clearTimeout(t.connTimer);
-        runSend(t, dataChannelIO(t, dc));
+        runSend(t, dataChannelIO(t, dc, pickChunk(pc)));
       };
       dc.onmessage = (e) => { if (typeof e.data === 'string') onSenderCtrl(t, JSON.parse(e.data)); };
       dc.onclose = () => {
@@ -507,13 +528,18 @@
   }
 
   function fallbackToRelay(t) {
+    startRelay(t, false);
+  }
+
+  // fast = true: chủ động chọn đường qua server nội bộ vì nhanh hơn; false: P2P không kết nối được nên dùng dự phòng
+  function startRelay(t, fast) {
     if (TERMINAL.has(t.status) || t.mode === 'relay' || t.started) return;
     clearTimeout(t.connTimer);
     closePeer(t);
     t.mode = 'relay';
-    t.note = 'Chế độ dự phòng qua máy chủ';
-    socket.emit('use-relay', { to: t.peerId, transferId: t.id });
-    toast('Không kết nối trực tiếp được, chuyển sang chế độ dự phòng.');
+    t.fast = fast;
+    socket.emit('use-relay', { to: t.peerId, transferId: t.id, fast });
+    if (!fast) toast('Không kết nối trực tiếp được, chuyển sang chế độ dự phòng.');
     runSend(t, relayIO(t));
   }
 
@@ -535,9 +561,15 @@
     if (dc.readyState !== 'open') throw new Error('Kết nối bị ngắt');
   }
 
-  function dataChannelIO(t, dc) {
+  function pickChunk(pc) {
+    const max = pc && pc.sctp && Number(pc.sctp.maxMessageSize);
+    if (!max || !isFinite(max)) return CHUNK_FALLBACK;
+    return Math.max(CHUNK_MIN, Math.min(CHUNK_MAX, Math.floor(max)));
+  }
+
+  function dataChannelIO(t, dc, chunk) {
     return {
-      chunk: CHUNK,
+      chunk,
       async sendCtrl(obj) { await drain(dc); dc.send(JSON.stringify(obj)); },
       async sendBin(buf) { await drain(dc); dc.send(buf); },
       inflight: () => dc.bufferedAmount,
@@ -588,13 +620,21 @@
       for (let i = 0; i < t.files.length; i++) {
         const f = t.files[i];
         await io.sendCtrl({ t: 'start', i, name: f.name, size: f.size, type: f.type || '' });
-        for (let off = 0; off < f.size; off += io.chunk) {
-          if (t.cancelled) return;
-          const buf = await f.slice(off, off + io.chunk).arrayBuffer();
-          await io.sendBin(buf);
-          t.sent += buf.byteLength;
-          t.done = Math.max(0, t.sent - io.inflight());
-          tick(t);
+        // Đọc theo khối lớn và đọc trước khối kế tiếp trong lúc đang gửi khối hiện tại,
+        // để việc đọc ổ đĩa (hoặc thư viện ảnh) không làm đường truyền phải chờ.
+        const readBlock = (off) => f.slice(off, Math.min(off + READ_BLOCK, f.size)).arrayBuffer();
+        let next = f.size > 0 ? readBlock(0) : null;
+        for (let blockOff = 0; blockOff < f.size; blockOff += READ_BLOCK) {
+          const block = await next;
+          next = blockOff + READ_BLOCK < f.size ? readBlock(blockOff + READ_BLOCK) : null;
+          for (let p = 0; p < block.byteLength; p += io.chunk) {
+            if (t.cancelled) return;
+            const buf = block.slice(p, p + io.chunk);
+            await io.sendBin(buf);
+            t.sent += buf.byteLength;
+            t.done = Math.max(0, t.sent - io.inflight());
+            tick(t);
+          }
         }
         await io.sendCtrl({ t: 'end', i });
       }
@@ -609,6 +649,7 @@
     if (msg && msg.t === 'ack' && !TERMINAL.has(t.status)) {
       t.done = t.total;
       t.status = 'done';
+      t.finishedAt = performance.now();
       cleanupSoon(t);
       upsertCard(t);
     }
@@ -643,7 +684,13 @@
     if (!t) return;
     $('#in-avatar').innerHTML = ICONS[t.peerType] || ICONS.desktop;
     $('#in-title').textContent = `${t.peerName} muốn gửi ${describeFiles(t.metas)}`;
-    $('#in-sub').textContent = `${t.metas.length} tệp · ${fmtBytes(t.total)}`;
+    let sub = `${t.metas.length} tệp · ${fmtBytes(t.total)}`;
+    if (t.total >= STREAM_MIN) {
+      sub += CAN_STREAM
+        ? '. Bạn sẽ được chọn nơi lưu, tệp ghi thẳng ra ổ đĩa.'
+        : '. Tệp lớn được giữ trong bộ nhớ cho đến khi nhận xong; có thể lỗi nếu thiết bị thiếu RAM.';
+    }
+    $('#in-sub').textContent = sub;
 
     const pv = $('#in-previews');
     pv.innerHTML = '';
@@ -670,9 +717,13 @@
     q.textContent = `Còn ${incoming.length - 1} yêu cầu khác đang chờ`;
   }
 
-  $('#in-accept').addEventListener('click', () => {
+  $('#in-accept').addEventListener('click', async () => {
     const t = incoming.shift();
     if (!t) return;
+    const sinkPromise = chooseSink(t); // gọi ngay, không có await phía trước, để còn "thao tác của người dùng"
+    showIncoming();
+    t.sink = await sinkPromise;
+    if (TERMINAL.has(t.status)) return; // người gửi đã huỷ trong lúc chọn nơi lưu
     t.status = 'connecting';
     t.recvTimer = setTimeout(() => { if (t.status === 'connecting') fail(t, 'Hết thời gian chờ kết nối'); }, RECV_TIMEOUT);
     socket.emit('transfer-accept', { to: t.peerId, transferId: t.id });
@@ -693,7 +744,7 @@
     const t = mine(m, 'recv');
     if (!t || TERMINAL.has(t.status)) return;
     t.mode = 'relay';
-    t.note = 'Chế độ dự phòng qua máy chủ';
+    t.fast = !!m.fast;
     closePeer(t);
     upsertCard(t);
   });
@@ -754,36 +805,92 @@
     return pc;
   }
 
+  // --- Ghi thẳng ra ổ đĩa cho tệp lớn (File System Access API: Chrome/Edge, trên localhost hoặc HTTPS) ---
+  const CAN_STREAM = !!(window.isSecureContext && window.showSaveFilePicker && window.showDirectoryPicker);
+
+  // Phải gọi ngay trong sự kiện bấm "Chấp nhận" vì hộp thoại chọn nơi lưu cần thao tác của người dùng
+  async function chooseSink(t) {
+    if (!CAN_STREAM || t.total < STREAM_MIN) return null;
+    try {
+      if (t.metas.length === 1) return { kind: 'file', handle: await window.showSaveFilePicker({ suggestedName: t.metas[0].name }) };
+      return { kind: 'dir', dir: await window.showDirectoryPicker({ mode: 'readwrite' }) };
+    } catch (err) {
+      return null; // người dùng đóng hộp thoại: nhận vào bộ nhớ như bình thường
+    }
+  }
+
+  async function uniqueFileHandle(dir, name) {
+    const dot = name.lastIndexOf('.');
+    const base = dot > 0 ? name.slice(0, dot) : name;
+    const ext = dot > 0 ? name.slice(dot) : '';
+    let candidate = name;
+    for (let i = 1; ; i++) {
+      try { await dir.getFileHandle(candidate); } catch (err) { return dir.getFileHandle(candidate, { create: true }); }
+      candidate = `${base} (${i})${ext}`; // đã tồn tại: không ghi đè
+    }
+  }
+
+  // Các thao tác ghi đĩa chạy tuần tự theo thứ tự dữ liệu đến
+  function enqueue(t, fn) {
+    t.chain = (t.chain || Promise.resolve())
+      .then(() => (TERMINAL.has(t.status) ? null : fn()))
+      .catch((err) => fail(t, `Không ghi được tệp ra ổ đĩa: ${(err && err.message) || err}`));
+  }
+
+  function finishRecv(t) {
+    if (TERMINAL.has(t.status)) return;
+    if (t.received.length !== t.metas.length) return fail(t, 'Nhận không đủ số tệp');
+    t.done = t.total;
+    t.status = 'done';
+    t.finishedAt = performance.now();
+    sendBack(t, { t: 'ack' });
+    setTimeout(() => closePeer(t), 3000);
+    upsertCard(t);
+  }
+
   function onRecvCtrl(t, msg) {
     if (TERMINAL.has(t.status) || !msg) return;
     if (msg.t === 'start') {
       clearTimeout(t.recvTimer);
       if (t.status !== 'receiving') { t.status = 'receiving'; t.startedAt = performance.now(); upsertCard(t); }
-      t.cur = { i: msg.i, name: safeName(msg.name), size: Number(msg.size) || 0, type: String(msg.type || ''), chunks: [], got: 0 };
+      const c = { i: msg.i, name: safeName(msg.name), size: Number(msg.size) || 0, type: String(msg.type || ''), chunks: [], got: 0, writer: null };
+      t.cur = c;
+      if (t.sink) {
+        enqueue(t, async () => {
+          const handle = t.sink.kind === 'file' ? t.sink.handle : await uniqueFileHandle(t.sink.dir, c.name);
+          c.savedName = handle.name;
+          c.writer = await handle.createWritable();
+        });
+      }
     } else if (msg.t === 'end') {
       const c = t.cur;
       if (!c) return;
       if (c.got !== c.size) return fail(t, `Tệp "${c.name}" bị thiếu dữ liệu`);
+      t.cur = null;
+      if (t.sink) {
+        enqueue(t, async () => {
+          await c.writer.close();
+          t.received.push({ name: c.savedName || c.name, size: c.size, type: c.type, url: null, disk: true });
+        });
+        return;
+      }
       const blob = new Blob(c.chunks, { type: c.type || 'application/octet-stream' });
       const rec = { name: c.name, size: blob.size, type: c.type, blob, url: URL.createObjectURL(blob) };
       t.received.push(rec);
-      t.cur = null;
       if (AUTO_SAVE) saveFile(rec);
     } else if (msg.t === 'done') {
-      if (t.received.length !== t.metas.length) return fail(t, 'Nhận không đủ số tệp');
-      t.done = t.total;
-      t.status = 'done';
-      sendBack(t, { t: 'ack' });
-      setTimeout(() => closePeer(t), 3000);
-      upsertCard(t);
+      if (t.sink) enqueue(t, () => finishRecv(t));
+      else finishRecv(t);
     }
   }
 
   function onRecvBin(t, buf) {
-    if (TERMINAL.has(t.status) || !t.cur) return;
-    t.cur.chunks.push(buf);
-    t.cur.got += buf.byteLength;
+    const c = t.cur;
+    if (TERMINAL.has(t.status) || !c) return;
+    c.got += buf.byteLength;
     t.done += buf.byteLength;
+    if (t.sink) enqueue(t, () => c.writer.write(buf));
+    else c.chunks.push(buf);
     tick(t);
   }
 
@@ -818,7 +925,7 @@
   async function saveAll(t) {
     if (CAN_SHARE_FILES && IS_IOS) {
       try {
-        const files = t.received.map((r) => new File([r.blob], r.name, { type: r.type || r.blob.type }));
+        const files = t.received.filter((r) => r.blob).map((r) => new File([r.blob], r.name, { type: r.type || r.blob.type }));
         if (navigator.canShare({ files })) {
           await navigator.share({ files });
           return;
@@ -827,7 +934,7 @@
         if (err && err.name === 'AbortError') return;
       }
     }
-    for (const r of t.received) { saveFile(r); await sleep(250); }
+    for (const r of t.received) { if (r.url) { saveFile(r); await sleep(250); } }
   }
 
   // ------------------------------------------------------------------ Huỷ / lỗi / dọn dẹp
@@ -853,6 +960,8 @@
     clearTimeout(t.connTimer);
     clearTimeout(t.recvTimer);
     closePeer(t);
+    // Đang ghi dở ra ổ đĩa: huỷ để không để lại tệp dang dở
+    if (t.cur && t.cur.writer) t.cur.writer.abort().catch(() => {});
     if (t.cur) t.cur = null;
   }
   function cleanupSoon(t) {
@@ -862,7 +971,7 @@
 
   function dismiss(t) {
     if (!TERMINAL.has(t.status)) return;
-    (t.received || []).forEach((r) => URL.revokeObjectURL(r.url));
+    (t.received || []).forEach((r) => { if (r.url) URL.revokeObjectURL(r.url); });
     transfers.delete(t.id);
     const el = document.getElementById('t-' + t.id);
     if (el) el.remove();
@@ -883,7 +992,12 @@
       case 'connecting': return t.dir === 'send' ? 'Đang kết nối trực tiếp…' : 'Đang kết nối…';
       case 'sending': case 'receiving': return progressText(t);
       case 'finishing': return 'Đang hoàn tất…';
-      case 'done': return t.dir === 'send' ? `Đã gửi · ${fmtBytes(t.total)}` : `Đã nhận · ${fmtBytes(t.total)}`;
+      case 'done': {
+        const secs = t.startedAt && t.finishedAt ? (t.finishedAt - t.startedAt) / 1000 : 0;
+        const speed = secs > 0.3 && t.total > 1024 * 1024 ? ` · TB ${fmtBytes(t.total / secs)}/s` : '';
+        const where = t.sink ? ' · đã lưu vào ổ đĩa' : '';
+        return `${t.dir === 'send' ? 'Đã gửi' : 'Đã nhận'} · ${fmtBytes(t.total)}${speed}${where}`;
+      }
       case 'declined': return t.note || `${who} đã từ chối`;
       case 'cancelled': return t.note || 'Đã huỷ';
       case 'error': return esc(t.note || 'Có lỗi xảy ra');
@@ -895,7 +1009,7 @@
     const pct = t.total ? Math.min(100, Math.floor((t.done / t.total) * 100)) : 0;
     const secs = (performance.now() - (t.startedAt || performance.now())) / 1000;
     const speed = secs > 0.5 ? ` · ${fmtBytes(t.done / secs)}/s` : '';
-    return `${pct}% · ${fmtBytes(t.done)} / ${fmtBytes(t.total)}${speed}${t.mode === 'relay' ? ' · dự phòng' : ''}`;
+    return `${pct}% · ${fmtBytes(t.done)} / ${fmtBytes(t.total)}${speed}${t.mode === 'relay' ? (t.fast ? ' · qua máy chủ nội bộ' : ' · dự phòng') : ''}`;
   }
 
   function cardHTML(t) {
@@ -909,15 +1023,18 @@
     let extra = '';
     if (t.dir === 'recv' && ok) {
       const chips = t.received.slice(0, 6).map((r, i) => {
-        const media = kindOf(r) === 'image'
+        const media = r.url && kindOf(r) === 'image'
           ? `<img alt="" loading="lazy" decoding="async" src="${r.url}">`
           : `<span class="ph">${kindOf(r) === 'video' ? ICONS.video : ICONS.file}</span>`;
-        return `<button class="chip" type="button" data-act="save" data-i="${i}" title="Lưu lại">${media}<span>${esc(r.name)}</span></button>`;
+        // Tệp đã ghi thẳng ra ổ đĩa không còn trong bộ nhớ nên không có nút "lưu lại"
+        return r.url
+          ? `<button class="chip" type="button" data-act="save" data-i="${i}" title="Lưu lại">${media}<span>${esc(r.name)}</span></button>`
+          : `<span class="chip" title="Đã lưu vào ổ đĩa">${media}<span>${esc(r.name)}</span></span>`;
       }).join('');
       const more = t.received.length > 6 ? `<span class="chip" style="padding:4px 10px">+${t.received.length - 6}</span>` : '';
       extra = `<div class="got">${chips}${more}</div>`;
       const label = IS_IOS && CAN_SHARE_FILES ? 'Lưu vào Ảnh / Tệp' : 'Lưu lại tất cả';
-      if (!AUTO_SAVE || t.received.length > 1) extra += `<button class="btn small ${AUTO_SAVE ? '' : 'primary'}" type="button" data-act="saveall">${label}</button>`;
+      if (!t.sink && (!AUTO_SAVE || t.received.length > 1)) extra +=`<button class="btn small ${AUTO_SAVE ? '' : 'primary'}" type="button" data-act="saveall">${label}</button>`;
     }
 
     return `
