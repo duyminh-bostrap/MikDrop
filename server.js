@@ -36,6 +36,25 @@ const argValue = (name) => {
   return i !== -1 ? args[i + 1] : undefined;
 };
 
+// Bản exe trên Windows chạy nền, không có cửa sổ terminal (exe được đặt ở chế độ GUI khi build):
+// log ghi vào MikDrop.log cạnh file exe, lỗi nghiêm trọng hiện bằng hộp thoại.
+const HEADLESS = !!sea && process.platform === 'win32';
+if (HEADLESS) {
+  const logFile = path.join(BASE_DIR, 'MikDrop.log');
+  try { fs.writeFileSync(logFile, ''); } catch (err) { /* thư mục có thể không ghi được, bỏ qua */ }
+  const write = (...parts) => {
+    try { fs.appendFileSync(logFile, `${parts.map((p) => (typeof p === 'string' ? p : String(p))).join(' ')}\n`); } catch (err) { /* bỏ qua */ }
+  };
+  console.log = write;
+  console.warn = write;
+  console.error = write;
+}
+
+// Tự thoát khi không còn trang web nào mở (mặc định chỉ với bản exe; --keep-alive để tắt tính năng này)
+const AUTO_EXIT = !!sea && !args.includes('--keep-alive');
+const AUTO_EXIT_GRACE_MS = 15000;       // chờ khi tải lại trang hoặc mạng chập chờn
+const AUTO_EXIT_FIRST_MS = 120000;      // chờ trình duyệt mở lần đầu
+
 const EXPLICIT_PORT = Number(argValue('--port') || process.env.PORT) || 0;
 let PORT = EXPLICIT_PORT || 3000; // nếu không chỉ định và cổng bận, tự thử cổng kế tiếp
 const USE_HTTPS = args.includes('--https') || process.env.HTTPS === '1';
@@ -126,7 +145,19 @@ app.get('/api/info', (req, res) => {
   const scheme = USE_HTTPS ? 'https' : 'http';
   res.json({
     urls: getLanInterfaces().map((i) => `${scheme}://${i.address}:${PORT}`),
+    canQuit: !!sea, // bản exe: giao diện hiện nút "Thoát MikDrop" khi mở từ chính máy này
   });
+});
+
+// Thoát hẳn MikDrop (bản exe không có cửa sổ để đóng). Chỉ nhận từ chính máy này và yêu cầu header tuỳ chỉnh,
+// nên trang web khác không thể tự gọi (header lạ buộc trình duyệt kiểm tra CORS trước, mà server không cho phép).
+const isLoopback = (addr) => /^(127\.|::1$|::ffff:127\.)/.test(String(addr || ''));
+app.post('/api/quit', (req, res) => {
+  if (!sea || !isLoopback(req.socket.remoteAddress) || req.headers['x-mikdrop'] !== '1') {
+    return res.status(403).type('text').send('forbidden');
+  }
+  res.type('text').send('bye');
+  setTimeout(() => process.exit(0), 200);
 });
 
 async function createServer() {
@@ -342,13 +373,18 @@ function startMdns() {
 // ---------------------------------------------------------------------------
 // Khởi động
 // ---------------------------------------------------------------------------
-// Khi chạy bằng exe (double-click), cửa sổ sẽ đóng ngay nếu lỗi nên cần giữ lại để người dùng đọc
+// Lỗi nghiêm trọng. Bản exe không có cửa sổ terminal nên báo bằng hộp thoại Windows.
 function fatal(message) {
   console.error(message);
-  if (sea) {
-    console.error('  Nhấn Enter để đóng.');
-    process.stdin.resume();
-    process.stdin.once('data', () => process.exit(1));
+  if (HEADLESS) {
+    const text = String(message).trim().slice(0, 500).replace(/'/g, "''");
+    require('child_process').execFile(
+      'powershell.exe',
+      ['-NoProfile', '-WindowStyle', 'Hidden', '-Command',
+        `Add-Type -AssemblyName PresentationFramework; [void][System.Windows.MessageBox]::Show('${text}', 'MikDrop')`],
+      { windowsHide: true },
+      () => process.exit(1)
+    );
   } else {
     process.exit(1);
   }
@@ -372,13 +408,15 @@ function printBanner() {
   if (USE_HTTPS) console.log('\n  HTTPS tự ký: trình duyệt sẽ cảnh báo lần đầu, hãy chọn "Tiếp tục/Nâng cao → Truy cập".');
 
   const best = lan.find((i) => !i.virtual && i.isPrivate) || lan[0];
-  if (best) {
+  if (HEADLESS) {
+    // Không có terminal: mã QR hiện trong giao diện web
+  } else if (best) {
     try {
       const url = `${scheme}://${best.address}${portPart}`;
       console.log('\n  Quét mã QR bằng iPhone để mở nhanh:\n');
       require('qrcode-terminal').generate(url, { small: true }, (qr) => {
         console.log(qr.replace(/^/gm, '    '));
-        if (sea) console.log('\n  Giữ cửa sổ này mở trong lúc dùng MikDrop. Đóng cửa sổ để tắt.');
+        if (sea) console.log('\n  Giữ cửa sổ này mở trong lúc dùng MikDrop. Đóng cửa sổ để tắt.'); // bản exe chạy ở chế độ --keep-alive hoặc không phải Windows
       });
     } catch (err) {
       /* QR là tính năng phụ, bỏ qua nếu lỗi */
@@ -389,16 +427,34 @@ function printBanner() {
 
   // Bản exe: tự mở giao diện trên máy này
   if (sea && process.platform === 'win32' && !args.includes('--no-open')) {
-    require('child_process').exec(`start "" "${scheme}://localhost${portPart}"`, () => {});
+    require('child_process').exec(`start "" "${scheme}://localhost${portPart}"`, { windowsHide: true }, () => {});
   }
 }
 
-(async () => {
-  if (sea && process.platform === 'win32') {
-    try { require('child_process').execSync('chcp 65001 > nul', { stdio: 'ignore', shell: true }); } catch (err) { /* bỏ qua */ }
-    process.title = 'MikDrop';
-  }
+// Bản exe: thoát khi không còn trang web nào kết nối (đã đóng trình duyệt), để không chạy ngầm vô ích
+function setupAutoExit(io) {
+  if (!AUTO_EXIT) return;
+  let timer = null;
+  const arm = (ms) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (io.engine.clientsCount === 0) {
+        console.log('Không còn trang web nào đang mở, MikDrop tự thoát.');
+        process.exit(0);
+      }
+    }, ms);
+  };
+  io.on('connection', (socket) => {
+    clearTimeout(timer);
+    socket.on('disconnect', () => {
+      // clientsCount được cập nhật sau sự kiện đóng, nên kiểm tra ở vòng lặp kế tiếp
+      setImmediate(() => { if (io.engine.clientsCount === 0) arm(AUTO_EXIT_GRACE_MS); });
+    });
+  });
+  arm(AUTO_EXIT_FIRST_MS); // trình duyệt chưa kịp mở (hoặc bị chặn) thì cũng không chạy ngầm mãi
+}
 
+(async () => {
   const server = await createServer();
   const io = new Server(server, {
     serveClient: false, // file client nằm ở public/vendor/ (trong bản exe không có file thật để Socket.io tự đọc)
@@ -407,6 +463,7 @@ function printBanner() {
     pingTimeout: 20000,
   });
   attachSignaling(io);
+  setupAutoExit(io);
 
   let attempts = 0;
   server.on('error', (err) => {

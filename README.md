@@ -88,10 +88,11 @@ npm run build:exe
 Kết quả nằm ở `dist/MikDrop.exe`. Copy file này sang bất kỳ máy Windows nào rồi dùng.
 
 **Dùng:**
-1. Bấm đúp `MikDrop.exe`. Trình duyệt tự mở `http://localhost:3000` và **hiện sẵn mã QR** để iPhone quét (mở lại bất cứ lúc nào bằng nút QR ở góc trên bên phải). Cửa sổ đen cũng in địa chỉ và mã QR.
+1. Bấm đúp `MikDrop.exe`. Trình duyệt tự mở `http://localhost:3000` và **hiện sẵn mã QR** để iPhone quét (mở lại bất cứ lúc nào bằng nút QR ở góc trên bên phải). MikDrop chạy nền, **không hiện cửa sổ terminal**.
 2. Windows hỏi về tường lửa: tick **Mạng riêng tư (Private networks)** rồi bấm **Cho phép**, để các thiết bị khác truy cập được.
 3. Trên iPhone/Mac, quét mã QR hoặc mở địa chỉ `http://<IP>:3000` được in trong cửa sổ.
-4. Giữ cửa sổ mở trong lúc dùng. Đóng cửa sổ là tắt MikDrop.
+4. **Tự thoát:** khi đóng hết các trang MikDrop (trên cả máy này lẫn iPhone), khoảng 15 giây sau MikDrop tự tắt. Còn một trang nào mở thì nó vẫn chạy. Có thể tắt ngay bằng nút **Thoát MikDrop** ở cuối trang (chỉ hiện khi mở từ chính máy chạy exe). Nếu không có trang nào được mở trong 2 phút đầu, nó cũng tự tắt.
+5. Nhật ký chạy nằm trong `MikDrop.log` cạnh file exe. Lỗi nghiêm trọng (ví dụ không mở được cổng) hiện bằng hộp thoại.
 
 **Tuỳ chọn** (chạy từ PowerShell hoặc tạo shortcut):
 
@@ -99,6 +100,9 @@ Kết quả nằm ở `dist/MikDrop.exe`. Copy file này sang bất kỳ máy Wi
 |---|---|
 | `MikDrop.exe --port 8080` | Chọn cổng. Mặc định là 3000, nếu bận sẽ tự thử 3001, 3002... |
 | `MikDrop.exe --no-open` | Không tự mở trình duyệt |
+| `MikDrop.exe --keep-alive` | Không tự thoát khi đóng hết trang web |
+
+Muốn bản exe có cửa sổ terminal để gỡ lỗi, build bằng `set MIKDROP_CONSOLE=1` (cmd) hoặc `$env:MIKDROP_CONSOLE=1` (PowerShell) trước khi chạy `npm run build:exe`.
 | `MikDrop.exe --https` | HTTPS tự ký (để iPhone có nút "Lưu vào Ảnh"). Chứng chỉ lưu cạnh file exe, trong thư mục `.cert` |
 
 Lưu ý: file exe chưa được ký số nên Windows SmartScreen có thể cảnh báo "Windows protected your PC". Bấm **More info → Run anyway**. Nếu muốn tránh hẳn, cần mua chứng chỉ ký mã (code signing).

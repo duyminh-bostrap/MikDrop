@@ -1072,6 +1072,16 @@
     if (b) { inviteIdx = Number(b.dataset.i); renderInvite(); }
   });
 
+  // Bản exe chạy nền (không có cửa sổ để đóng): hiện nút thoát khi mở từ chính máy chạy server
+  if (/^(localhost|127\.)/.test(location.hostname)) {
+    fetch('/api/info').then((r) => r.json()).then((info) => { if (info.canQuit) $('#quitbtn').hidden = false; }).catch(() => {});
+  }
+  $('#quitbtn').addEventListener('click', async () => {
+    if (!window.confirm('Thoát MikDrop? Các thiết bị khác sẽ không gửi được tệp nữa.')) return;
+    try { await fetch('/api/quit', { method: 'POST', headers: { 'X-MikDrop': '1' } }); } catch (e) { /* server đã tắt */ }
+    document.body.innerHTML = '<p style="padding:32px;font:16px sans-serif;color:#fff4ec">MikDrop đã tắt. Bạn có thể đóng tab này.</p>';
+  });
+
   // Lần đầu mở trên chính máy chạy server (ví dụ vừa bấm đúp MikDrop.exe): tự hiện mã QR một lần
   if (/^(localhost|127\.)/.test(location.hostname) && !store.get('mikdrop.qrshown')) {
     store.set('mikdrop.qrshown', '1');

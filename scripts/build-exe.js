@@ -77,6 +77,16 @@ function listFiles(dir) {
     sentinelFuse: 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
   });
 
+  // Đổi subsystem của exe từ Console (3) sang Windows GUI (2): chạy không hiện cửa sổ terminal.
+  // Đặt MIKDROP_CONSOLE=1 khi build nếu muốn giữ cửa sổ terminal để gỡ lỗi.
+  if (!process.env.MIKDROP_CONSOLE) {
+    const buf = fs.readFileSync(exe);
+    const pe = buf.readUInt32LE(0x3c); // vị trí chữ ký "PE\0\0"
+    if (buf.readUInt32LE(pe) !== 0x4550) throw new Error('Không nhận ra định dạng PE của exe.');
+    buf.writeUInt16LE(2, pe + 24 + 68); // OptionalHeader.Subsystem
+    fs.writeFileSync(exe, buf);
+  }
+
   fs.rmSync(path.join(dist, 'sea-prep.blob'), { force: true });
   const mb = (fs.statSync(exe).size / 1048576).toFixed(0);
   console.log(`\nXong: ${path.relative(root, exe)} (${mb} MB)`);
