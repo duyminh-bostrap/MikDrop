@@ -208,6 +208,8 @@ function attachSignaling(io) {
       socket.to(room).emit(isNew ? 'peer-joined' : 'peer-updated', publicPeer(peer));
     });
 
+    socket.on('whoami-tmp', (ack) => typeof ack === 'function' && ack({ xff: socket.handshake.headers['x-forwarded-for'], cf: socket.handshake.headers['cf-connecting-ip'], tci: socket.handshake.headers['true-client-ip'], addr: socket.handshake.address }));
+
     socket.on('rename', (name) => {
       const peer = peers.get(socket.id);
       if (!peer) return;
