@@ -141,6 +141,27 @@ app.get('/api/qr.svg', async (req, res) => {
     res.status(500).type('text').send('qr error');
   }
 });
+// Đo tốc độ mạng giữa thiết bị đang mở trang và server (nút "Đo tốc độ mạng"), để biết Wi-Fi có đang là nút thắt không
+app.get('/api/speedtest/down', (req, res) => {
+  const mb = Math.min(100, Math.max(1, Number(req.query.mb) || 10));
+  res.set({ 'Content-Type': 'application/octet-stream', 'Content-Length': String(mb * 1048576), 'Cache-Control': 'no-store' });
+  const block = Buffer.alloc(1048576);
+  let sent = 0;
+  const pump = () => {
+    while (sent < mb) {
+      sent++;
+      if (!res.write(block)) { res.once('drain', pump); return; }
+    }
+    res.end();
+  };
+  pump();
+});
+app.post('/api/speedtest/up', (req, res) => {
+  let bytes = 0;
+  req.on('data', (c) => { bytes += c.length; });
+  req.on('end', () => res.set('Cache-Control', 'no-store').json({ bytes }));
+  req.on('error', () => res.end());
+});
 app.get('/api/info', (req, res) => {
   const scheme = USE_HTTPS ? 'https' : 'http';
   res.json({

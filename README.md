@@ -171,6 +171,22 @@ Fly.io, Railway... cũng chạy được: đặt biến môi trường `TRUST_PR
 - Trên Wi-Fi thật, tốc độ bị giới hạn bởi Wi-Fi (băng tần 5 GHz/Wi-Fi 6, khoảng cách tới router, số thiết bị dùng chung). Dùng cáp mạng cho máy chạy server thì nhanh hơn. Số liệu trên là đo trên một máy, chưa đo giữa các thiết bị thật.
 - Trên Internet (bản Render), server không phải thiết bị của ai nên luôn đi P2P; đường qua server chỉ là dự phòng.
 
+### Đo tốc độ Wi-Fi
+
+Bấm **Đo tốc độ mạng** ở cuối trang (nên mở trên iPhone) để đo độ trễ, tải xuống và tải lên giữa thiết bị đó và máy chạy MikDrop. Đây chính là mức trần khi gửi tệp: nếu kết quả thấp (dưới khoảng 3 MB/s) thì nút thắt là Wi-Fi chứ không phải ứng dụng. Hãy lại gần router, dùng băng tần 5 GHz, tránh hotspot điện thoại, tắt VPN và Chế độ nguồn điện thấp.
+
+## Chạy nền khi đang gửi
+
+Tệp được truyền **bởi trang web đang mở**, nên trang phải còn sống trong suốt lần gửi:
+
+| Thiết bị | Khi chuyển app, khoá màn hình hoặc thu nhỏ |
+|---|---|
+| **iPhone/iPad (Safari)** | Hệ điều hành tạm dừng trang sau vài giây, **kết nối đứt và lần gửi dừng**. Phải giữ màn hình sáng và ở trong Safari đến khi xong. Thêm vào Màn hình chính không thay đổi điều này |
+| **Android (Chrome)** | Tương tự nhưng thường chịu được lâu hơn một chút. Khoá màn hình thì vẫn có thể bị tạm dừng |
+| **Windows/macOS** | Chạy bình thường khi trang ở tab nền hoặc cửa sổ bị thu nhỏ. **Không đóng tab**, vì đóng là dừng |
+
+MikDrop tự dùng **Wake Lock** để giữ màn hình sáng khi đang truyền, nhưng trình duyệt chỉ cho phép trên **HTTPS hoặc localhost**. Trên iPhone, hãy chạy `MikDrop.exe --https` (hoặc dùng bản Render). Nếu dùng HTTP thường, MikDrop sẽ nhắc bạn giữ màn hình sáng, và bạn có thể đặt Cài đặt → Màn hình & Độ sáng → Tự động khoá thành **Không bao giờ** khi gửi tệp lớn.
+
 ## Luồng kỹ thuật
 
 ```

@@ -52,6 +52,7 @@
         <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z"/></svg>
       </button>
       <button class="whoami" id="quitbtn" type="button" hidden>Thoát MikDrop</button>
+      <button class="whoami" id="speedbtn" type="button">Đo tốc độ mạng</button>
       <button class="whoami" id="roombtn" type="button" title="Kết nối thiết bị ở mạng khác bằng mã phòng">
         <span id="room-label">Cùng mạng Wi-Fi</span>
         <svg viewBox="0 0 24 24"><path d="M9.5 14.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14.5 9.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
@@ -119,6 +120,24 @@
         <button class="btn primary" type="submit">Lưu</button>
       </div>
     </form>
+  </div>
+
+  <!-- Đo tốc độ mạng -->
+  <div class="overlay center" id="speed" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="speed-title">
+      <h2 id="speed-title">Đo tốc độ mạng</h2>
+      <p class="muted">Đo giữa thiết bị này và máy chạy MikDrop. Đây cũng là tốc độ tối đa khi gửi tệp giữa hai thiết bị.</p>
+      <div class="speed-grid">
+        <div><span class="k">Độ trễ</span><b id="sp-ping">–</b></div>
+        <div><span class="k">Tải xuống</span><b id="sp-down">–</b></div>
+        <div><span class="k">Tải lên</span><b id="sp-up">–</b></div>
+      </div>
+      <p class="speed-note" id="sp-note"></p>
+      <div class="actions">
+        <button class="btn" id="speed-close" type="button">Đóng</button>
+        <button class="btn primary" id="speed-run" type="button">Đo lại</button>
+      </div>
+    </div>
   </div>
 
   <!-- Mời thiết bị bằng mã QR -->

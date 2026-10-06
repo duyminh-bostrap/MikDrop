@@ -1062,7 +1062,34 @@
     el.className = 'card' + (ok ? ' done' : bad ? ' fail' : '');
     el.innerHTML = cardHTML(t);
     syncTray();
+    syncWakeLock();
   }
+
+  // ------------------------------------------------------------------ Giữ màn hình sáng khi đang truyền
+  // Trình duyệt di động tạm dừng trang web khi khoá màn hình hoặc chuyển sang app khác, làm đứt kết nối.
+  // Wake Lock (cần HTTPS hoặc localhost) giữ màn hình sáng cho đến khi truyền xong.
+  const BUSY_STATES = ['connecting', 'sending', 'receiving', 'finishing'];
+  const IS_MOBILE = IS_IOS || /Android/i.test(navigator.userAgent);
+  let wakeLock = null;
+  let warnedAwake = false;
+
+  async function syncWakeLock() {
+    const busy = [...transfers.values()].some((t) => BUSY_STATES.includes(t.status));
+    if (busy && !warnedAwake && IS_MOBILE && !('wakeLock' in navigator)) {
+      warnedAwake = true;
+      toast('Giữ màn hình sáng và đừng chuyển sang app khác cho đến khi truyền xong.');
+    }
+    if (busy && !wakeLock && 'wakeLock' in navigator && !document.hidden) {
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } catch (err) { /* không bắt buộc */ }
+    } else if (!busy && wakeLock) {
+      wakeLock.release().catch(() => {});
+      wakeLock = null;
+    }
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncWakeLock(); });
 
   let lastTick = 0;
   function tick(t) {
@@ -1143,6 +1170,78 @@
     }
     renameEl.hidden = true;
   });
+
+  // ------------------------------------------------------------------ Đo tốc độ mạng
+  const speedEl = $('#speed');
+  let speedBusy = false;
+  const mbps = (bytes, ms) => bytes / 1048576 / (ms / 1000);
+  const fmtSpeed = (v) => `${v >= 10 ? Math.round(v) : v.toFixed(1).replace('.', ',')} MB/s`;
+
+  async function timedDown(mb) {
+    const t0 = performance.now();
+    const buf = await (await fetch(`/api/speedtest/down?mb=${mb}&t=${Date.now()}`, { cache: 'no-store' })).arrayBuffer();
+    return mbps(buf.byteLength, performance.now() - t0);
+  }
+  async function timedUp(mb) {
+    const body = new Blob([new Uint8Array(mb * 1048576)]);
+    const t0 = performance.now();
+    await fetch('/api/speedtest/up', { method: 'POST', body, headers: { 'Content-Type': 'application/octet-stream' }, cache: 'no-store' });
+    return mbps(body.size, performance.now() - t0);
+  }
+
+  async function runSpeedTest() {
+    if (speedBusy) return;
+    speedBusy = true;
+    const run = $('#speed-run');
+    run.disabled = true;
+    run.textContent = 'Đang đo…';
+    for (const id of ['#sp-ping', '#sp-down', '#sp-up']) $(id).textContent = '…';
+    $('#sp-note').textContent = '';
+    try {
+      const pings = [];
+      for (let i = 0; i < 6; i++) {
+        const t0 = performance.now();
+        await fetch(`/healthz?t=${Date.now()}${i}`, { cache: 'no-store' });
+        pings.push(performance.now() - t0);
+      }
+      pings.shift(); // lần đầu có thể gồm cả thời gian mở kết nối
+      pings.sort((a, b) => a - b);
+      const ping = pings[Math.floor(pings.length / 2)];
+      $('#sp-ping').textContent = `${Math.round(ping)} ms`;
+
+      // Đo thử nhỏ để chọn dung lượng sao cho mỗi lần đo kéo dài vài giây
+      const size = (probe) => Math.max(4, Math.min(60, Math.round(probe * 3)));
+      const down = await timedDown(size(await timedDown(2)));
+      $('#sp-down').textContent = fmtSpeed(down);
+      const up = await timedUp(size(await timedUp(2)));
+      $('#sp-up').textContent = fmtSpeed(up);
+
+      const worst = Math.min(down, up);
+      const local = /^(localhost|127\.)/.test(location.hostname);
+      let note;
+      if (local) {
+        note = 'Bạn đang đo ngay trên máy chạy MikDrop nên số này không phản ánh Wi-Fi. <strong>Mở MikDrop trên iPhone rồi đo ở đó</strong> để biết tốc độ thật.';
+      } else if (worst < 3) {
+        note = `<strong>Wi-Fi đang rất chậm</strong> (khoảng ${fmtSpeed(worst)}), nên gửi tệp không thể nhanh hơn. Thử: lại gần router, dùng băng tần 5 GHz, tránh dùng hotspot điện thoại, tắt Chế độ nguồn điện thấp trên iPhone, tắt VPN.`;
+      } else if (worst < 15) {
+        note = `Mạng ở mức trung bình (${fmtSpeed(worst)}). Tốc độ gửi tệp sẽ không vượt con số này. Băng tần 5 GHz và đứng gần router sẽ nhanh hơn.`;
+      } else {
+        note = `<strong>Mạng tốt.</strong> Tốc độ gửi tệp có thể đạt gần ${fmtSpeed(worst)}.`;
+      }
+      if (!local && ping > 80) note += ' Độ trễ cao: iPhone có thể đang tiết kiệm điện Wi-Fi, hãy giữ màn hình sáng khi gửi.';
+      $('#sp-note').innerHTML = note;
+    } catch (err) {
+      $('#sp-note').textContent = 'Không đo được. Kiểm tra kết nối tới máy chạy MikDrop rồi thử lại.';
+    } finally {
+      speedBusy = false;
+      run.disabled = false;
+      run.textContent = 'Đo lại';
+    }
+  }
+  $('#speedbtn').addEventListener('click', () => { speedEl.hidden = false; runSpeedTest(); });
+  $('#speed-run').addEventListener('click', runSpeedTest);
+  $('#speed-close').addEventListener('click', () => { speedEl.hidden = true; });
+  speedEl.addEventListener('click', (e) => { if (e.target === speedEl && !speedBusy) speedEl.hidden = true; });
 
   // ------------------------------------------------------------------ Mời thiết bị bằng mã QR
   const inviteEl = $('#invite');
@@ -1248,7 +1347,8 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!inviteEl.hidden) inviteEl.hidden = true;
+    if (!speedEl.hidden && !speedBusy) speedEl.hidden = true;
+    else if (!inviteEl.hidden) inviteEl.hidden = true;
     else if (!roomEl.hidden) roomEl.hidden = true;
     else if (!renameEl.hidden) renameEl.hidden = true;
     else if (!sheet.hidden) closeSheet();
