@@ -74,6 +74,35 @@ npm run start:https
 
 rồi mở `https://<IP>:3000` trên iPhone, chọn **Nâng cao → Tiếp tục truy cập** (chứng chỉ tự ký, lưu trong `.cert/`). Khi nhận tệp sẽ có nút **Lưu vào Ảnh / Tệp**. Nếu dùng HTTP thường, iPhone vẫn nhận được và lưu qua trình tải xuống của Safari (vào app Tệp).
 
+## Chạy bằng MikDrop.exe (Windows, không cần cài Node.js)
+
+Bản exe là một file duy nhất (khoảng 92 MB), chạy hoàn toàn offline, giao diện đã nhúng sẵn bên trong.
+
+**Tạo file exe** (chỉ làm trên máy có Node.js 20 trở lên):
+
+```bash
+npm install
+npm run build:exe
+```
+
+Kết quả nằm ở `dist/MikDrop.exe`. Copy file này sang bất kỳ máy Windows nào rồi dùng.
+
+**Dùng:**
+1. Bấm đúp `MikDrop.exe`. Một cửa sổ đen hiện ra với địa chỉ và mã QR, đồng thời trình duyệt tự mở `http://localhost:3000`.
+2. Windows hỏi về tường lửa: tick **Mạng riêng tư (Private networks)** rồi bấm **Cho phép**, để các thiết bị khác truy cập được.
+3. Trên iPhone/Mac, quét mã QR hoặc mở địa chỉ `http://<IP>:3000` được in trong cửa sổ.
+4. Giữ cửa sổ mở trong lúc dùng. Đóng cửa sổ là tắt MikDrop.
+
+**Tuỳ chọn** (chạy từ PowerShell hoặc tạo shortcut):
+
+| Lệnh | Tác dụng |
+|---|---|
+| `MikDrop.exe --port 8080` | Chọn cổng. Mặc định là 3000, nếu bận sẽ tự thử 3001, 3002... |
+| `MikDrop.exe --no-open` | Không tự mở trình duyệt |
+| `MikDrop.exe --https` | HTTPS tự ký (để iPhone có nút "Lưu vào Ảnh"). Chứng chỉ lưu cạnh file exe, trong thư mục `.cert` |
+
+Lưu ý: file exe chưa được ký số nên Windows SmartScreen có thể cảnh báo "Windows protected your PC". Bấm **More info → Run anyway**. Nếu muốn tránh hẳn, cần mua chứng chỉ ký mã (code signing).
+
 ## Khi không có Internet
 
 - Bản chạy tại nhà (`npm start`) **không cần Internet**, chỉ cần các thiết bị cùng mạng cục bộ (router không nối Internet vẫn được). Giao diện không tải gì từ CDN.

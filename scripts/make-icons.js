@@ -126,3 +126,13 @@ for (const [name, size] of [['apple-touch-icon.png', 180], ['icon-192.png', 192]
   fs.writeFileSync(path.join(out, name), render(size, 0.56));
   console.log('wrote', name);
 }
+
+// Biểu tượng .ico (nhúng ảnh PNG 256x256) dùng cho file MikDrop.exe
+const ico256 = render(256, 0.7);
+const header = Buffer.alloc(22);
+header.writeUInt16LE(0, 0); header.writeUInt16LE(1, 2); header.writeUInt16LE(1, 4); // loại: icon, 1 ảnh
+header[6] = 0; header[7] = 0; header[8] = 0; header[9] = 0; // 0 = 256px
+header.writeUInt16LE(1, 10); header.writeUInt16LE(32, 12);
+header.writeUInt32LE(ico256.length, 14); header.writeUInt32LE(22, 18);
+fs.writeFileSync(path.join(__dirname, 'MikDrop.ico'), Buffer.concat([header, ico256]));
+console.log('wrote scripts/MikDrop.ico');

@@ -20,13 +20,24 @@ const path = require('path');
 const express = require('express');
 const { Server } = require('socket.io');
 
+// Khi đóng gói thành MikDrop.exe (Node SEA), giao diện được nhúng trong file exe
+let sea = null;
+try {
+  sea = require('node:sea');
+  if (!sea.isSea()) sea = null;
+} catch (err) {
+  sea = null;
+}
+const BASE_DIR = sea ? path.dirname(process.execPath) : __dirname; // nơi lưu .cert khi chạy bằng exe
+
 const args = process.argv.slice(2);
 const argValue = (name) => {
   const i = args.indexOf(name);
   return i !== -1 ? args[i + 1] : undefined;
 };
 
-const PORT = Number(argValue('--port') || process.env.PORT) || 3000;
+const EXPLICIT_PORT = Number(argValue('--port') || process.env.PORT) || 0;
+let PORT = EXPLICIT_PORT || 3000; // nếu không chỉ định và cổng bận, tự thử cổng kế tiếp
 const USE_HTTPS = args.includes('--https') || process.env.HTTPS === '1';
 const MDNS_NAME = 'mikdrop.local';
 
@@ -85,7 +96,19 @@ function getLanInterfaces() {
 // ---------------------------------------------------------------------------
 const app = express();
 app.disable('x-powered-by');
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
+if (sea) {
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    let p;
+    try { p = decodeURIComponent(req.path); } catch (err) { return next(); }
+    if (p.endsWith('/')) p += 'index.html';
+    let data;
+    try { data = Buffer.from(sea.getAsset('public' + p)); } catch (err) { return next(); }
+    res.type(path.extname(p) || 'bin').set('Cache-Control', 'no-cache').send(data);
+  });
+} else {
+  app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
+}
 app.get('/healthz', (req, res) => res.type('text').send('ok'));
 app.get('/api/config', (req, res) => res.json({ iceServers: ICE_SERVERS, relay: RELAY_ENABLED }));
 app.get('/api/info', (req, res) => {
@@ -99,7 +122,7 @@ async function createServer() {
   if (!USE_HTTPS) return http.createServer(app);
 
   // HTTPS tự ký - cần để iPhone dùng được "Lưu vào Ảnh" (Web Share API chỉ chạy trên HTTPS)
-  const certDir = path.join(__dirname, '.cert');
+  const certDir = path.join(BASE_DIR, '.cert');
   const keyFile = path.join(certDir, 'key.pem');
   const certFile = path.join(certDir, 'cert.pem');
   if (!fs.existsSync(keyFile) || !fs.existsSync(certFile)) {
@@ -308,7 +331,63 @@ function startMdns() {
 // ---------------------------------------------------------------------------
 // Khởi động
 // ---------------------------------------------------------------------------
+// Khi chạy bằng exe (double-click), cửa sổ sẽ đóng ngay nếu lỗi nên cần giữ lại để người dùng đọc
+function fatal(message) {
+  console.error(message);
+  if (sea) {
+    console.error('  Nhấn Enter để đóng.');
+    process.stdin.resume();
+    process.stdin.once('data', () => process.exit(1));
+  } else {
+    process.exit(1);
+  }
+}
+
+function printBanner() {
+  if (CLOUD) {
+    console.log(`MikDrop đang lắng nghe ở cổng ${PORT} (chế độ đám mây, relay ${RELAY_ENABLED ? 'bật' : 'tắt'}).`);
+    return;
+  }
+  const scheme = USE_HTTPS ? 'https' : 'http';
+  const portPart = (USE_HTTPS && PORT === 443) || (!USE_HTTPS && PORT === 80) ? '' : `:${PORT}`;
+  const lan = getLanInterfaces();
+
+  console.log('\n  MikDrop đang chạy\n');
+  console.log(`  Trên máy này:      ${scheme}://localhost${portPart}`);
+  for (const i of lan) {
+    console.log(`  Thiết bị khác:     ${scheme}://${i.address}${portPart}   (${i.name}${i.virtual ? ', có thể là card ảo' : ''})`);
+  }
+  if (startMdns()) console.log(`  Tên miền dễ nhớ:   ${scheme}://${MDNS_NAME}${portPart}`);
+  if (USE_HTTPS) console.log('\n  HTTPS tự ký: trình duyệt sẽ cảnh báo lần đầu, hãy chọn "Tiếp tục/Nâng cao → Truy cập".');
+
+  const best = lan.find((i) => !i.virtual && i.isPrivate) || lan[0];
+  if (best) {
+    try {
+      const url = `${scheme}://${best.address}${portPart}`;
+      console.log('\n  Quét mã QR bằng iPhone để mở nhanh:\n');
+      require('qrcode-terminal').generate(url, { small: true }, (qr) => {
+        console.log(qr.replace(/^/gm, '    '));
+        if (sea) console.log('\n  Giữ cửa sổ này mở trong lúc dùng MikDrop. Đóng cửa sổ để tắt.');
+      });
+    } catch (err) {
+      /* QR là tính năng phụ, bỏ qua nếu lỗi */
+    }
+  } else {
+    console.log('\n  Không tìm thấy địa chỉ mạng LAN. Hãy kiểm tra kết nối Wi-Fi hoặc bật Mobile Hotspot.\n');
+  }
+
+  // Bản exe: tự mở giao diện trên máy này
+  if (sea && process.platform === 'win32' && !args.includes('--no-open')) {
+    require('child_process').exec(`start "" "${scheme}://localhost${portPart}"`, () => {});
+  }
+}
+
 (async () => {
+  if (sea && process.platform === 'win32') {
+    try { require('child_process').execSync('chcp 65001 > nul', { stdio: 'ignore', shell: true }); } catch (err) { /* bỏ qua */ }
+    process.title = 'MikDrop';
+  }
+
   const server = await createServer();
   const io = new Server(server, {
     maxHttpBufferSize: 8 * 1024 * 1024, // đủ cho các mảnh relay 256KB + ảnh xem trước
@@ -317,47 +396,21 @@ function startMdns() {
   });
   attachSignaling(io);
 
+  let attempts = 0;
   server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`\n  Cổng ${PORT} đang được dùng. Thử: PORT=${PORT + 1} npm start (hoặc node server.js --port ${PORT + 1})\n`);
+    if (err.code === 'EADDRINUSE' && !EXPLICIT_PORT && attempts < 10) {
+      attempts++;
+      PORT++;
+      server.listen(PORT, '0.0.0.0');
+    } else if (err.code === 'EADDRINUSE') {
+      fatal(`\n  Cổng ${PORT} đang được dùng. Thử: PORT=${PORT + 1} npm start (hoặc --port ${PORT + 1})\n`);
     } else if (err.code === 'EACCES') {
-      console.error(`\n  Không đủ quyền mở cổng ${PORT}. Hãy dùng cổng >= 1024 hoặc chạy với quyền quản trị.\n`);
+      fatal(`\n  Không đủ quyền mở cổng ${PORT}. Hãy dùng cổng >= 1024 hoặc chạy với quyền quản trị.\n`);
     } else {
-      console.error(err);
+      fatal(String(err && err.stack || err));
     }
-    process.exit(1);
   });
 
-  server.listen(PORT, '0.0.0.0', () => {
-    if (CLOUD) {
-      console.log(`MikDrop đang lắng nghe ở cổng ${PORT} (chế độ đám mây, relay ${RELAY_ENABLED ? 'bật' : 'tắt'}).`);
-      return;
-    }
-    const scheme = USE_HTTPS ? 'https' : 'http';
-    const portPart = (USE_HTTPS && PORT === 443) || (!USE_HTTPS && PORT === 80) ? '' : `:${PORT}`;
-    const lan = getLanInterfaces();
-
-    console.log('\n  MikDrop đang chạy 🚀\n');
-    console.log(`  Trên máy này:      ${scheme}://localhost${portPart}`);
-    for (const i of lan) {
-      console.log(`  Thiết bị khác:     ${scheme}://${i.address}${portPart}   (${i.name}${i.virtual ? ', có thể là card ảo' : ''})`);
-    }
-    if (startMdns()) console.log(`  Tên miền dễ nhớ:   ${scheme}://${MDNS_NAME}${portPart}`);
-    if (USE_HTTPS) console.log('\n  HTTPS tự ký: trình duyệt sẽ cảnh báo lần đầu, hãy chọn "Tiếp tục/Nâng cao → Truy cập".');
-
-    const best = lan.find((i) => !i.virtual && i.isPrivate) || lan[0];
-    if (best) {
-      try {
-        const url = `${scheme}://${best.address}${portPart}`;
-        console.log('\n  Quét mã QR bằng iPhone để mở nhanh:\n');
-        require('qrcode-terminal').generate(url, { small: true }, (qr) => {
-          console.log(qr.replace(/^/gm, '    '));
-        });
-      } catch (err) {
-        /* QR là tính năng phụ, bỏ qua nếu lỗi */
-      }
-    } else {
-      console.log('\n  ⚠ Không tìm thấy địa chỉ mạng LAN. Hãy kiểm tra kết nối Wi-Fi.\n');
-    }
-  });
-})();
+  server.on('listening', printBanner);
+  server.listen(PORT, '0.0.0.0');
+})().catch((err) => fatal(String(err && err.stack || err)));
