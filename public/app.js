@@ -1022,6 +1022,57 @@
     renameEl.hidden = true;
   });
 
+  // ------------------------------------------------------------------ Mời thiết bị bằng mã QR
+  const inviteEl = $('#invite');
+  let inviteUrls = [];
+  let inviteIdx = 0;
+
+  async function loadInviteUrls() {
+    // Mở từ localhost thì iPhone không dùng được địa chỉ đó, nên hỏi server địa chỉ mạng LAN của máy
+    const isLocal = /^(localhost|127\.|\[?::1\]?$)/.test(location.hostname);
+    let urls = [];
+    if (isLocal) {
+      try { urls = ((await (await fetch('/api/info')).json()).urls) || []; } catch (e) { /* bỏ qua */ }
+    } else {
+      urls = [location.origin];
+    }
+    return urls.map((u) => (myRoom ? `${u}/?room=${encodeURIComponent(myRoom)}` : u));
+  }
+
+  function renderInvite() {
+    const box = $('#qr-box');
+    const url = inviteUrls[inviteIdx];
+    box.hidden = !url;
+    $('#invite-url').textContent = url || 'Chưa thấy địa chỉ mạng. Hãy kết nối Wi-Fi hoặc bật Mobile Hotspot rồi thử lại.';
+    if (url) $('#qr-img').src = `/api/qr.svg?u=${encodeURIComponent(url)}`;
+    const list = $('#invite-urls');
+    list.hidden = inviteUrls.length < 2;
+    list.innerHTML = inviteUrls.length < 2 ? '' : inviteUrls
+      .map((u, i) => `<button type="button" class="target${i === inviteIdx ? ' on' : ''}" data-i="${i}">${esc(u.replace(/^https?:\/\//, '').replace(/\/\?room=.*$/, ''))}</button>`)
+      .join('');
+  }
+
+  async function openInvite() {
+    inviteEl.hidden = false;
+    inviteUrls = await loadInviteUrls();
+    inviteIdx = 0;
+    renderInvite();
+  }
+  $('#invitebtn').addEventListener('click', openInvite);
+  $('#empty-qr').addEventListener('click', openInvite);
+  $('#invite-close').addEventListener('click', () => { inviteEl.hidden = true; });
+  inviteEl.addEventListener('click', (e) => { if (e.target === inviteEl) inviteEl.hidden = true; });
+  $('#invite-urls').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-i]');
+    if (b) { inviteIdx = Number(b.dataset.i); renderInvite(); }
+  });
+
+  // Lần đầu mở trên chính máy chạy server (ví dụ vừa bấm đúp MikDrop.exe): tự hiện mã QR một lần
+  if (/^(localhost|127\.)/.test(location.hostname) && !store.get('mikdrop.qrshown')) {
+    store.set('mikdrop.qrshown', '1');
+    setTimeout(() => { if (!peers.size) openInvite(); }, 1500);
+  }
+
   // ------------------------------------------------------------------ Phòng
   const roomEl = $('#room');
   const roomInput = $('#room-input');
@@ -1065,7 +1116,8 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!roomEl.hidden) roomEl.hidden = true;
+    if (!inviteEl.hidden) inviteEl.hidden = true;
+    else if (!roomEl.hidden) roomEl.hidden = true;
     else if (!renameEl.hidden) renameEl.hidden = true;
     else if (!sheet.hidden) closeSheet();
   });

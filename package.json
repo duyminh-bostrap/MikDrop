@@ -15,6 +15,7 @@
   "dependencies": {
     "express": "^5.2.1",
     "multicast-dns": "^7.2.5",
+    "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "selfsigned": "^5.5.0",
     "socket.io": "^4.8.4"

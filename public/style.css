@@ -56,6 +56,20 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .status.on i { background: var(--ok); box-shadow: 0 0 0 4px rgba(48, 185, 92, 0.18); }
 .status.off i { background: var(--danger); }
 
+.top-right { display: flex; align-items: center; gap: 8px; }
+.qrbtn {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--text);
+  background: var(--card); border: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.qrbtn:hover { color: var(--accent); }
+.qrbtn svg { width: 18px; height: 18px; }
+.qr { background: #fff; border-radius: 20px; padding: 10px; width: min(250px, 66vw); margin: 18px auto 12px; box-shadow: var(--shadow); }
+.qr img { display: block; width: 100%; height: auto; }
+.qr.empty-qr { display: none; }
+.invite-url { font-weight: 600; font-size: 15px; word-break: break-all; padding: 0 6px; }
+.urls { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+.urls .target { padding: 6px 12px; font-size: 13px; }
+.empty .link { pointer-events: auto; margin-top: 6px; }
 .banner {
   margin-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 14px; border-radius: 14px; font-size: 14px;

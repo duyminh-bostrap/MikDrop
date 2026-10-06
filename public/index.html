@@ -21,7 +21,12 @@
         <img class="logo" src="logo.svg" alt="" width="40" height="32">
         <span class="brand-name">MikDrop</span>
       </div>
-      <div class="status" id="status"><i></i><span>Đang kết nối…</span></div>
+      <div class="top-right">
+        <button class="qrbtn" id="invitebtn" type="button" aria-label="Hiện mã QR để mở trên thiết bị khác" title="Mời thiết bị bằng mã QR">
+          <svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2v2h-2zM18.5 14.5h2M14.5 18.5h2M18.5 18.5h2v2"/></svg>
+        </button>
+        <div class="status" id="status"><i></i><span>Đang kết nối…</span></div>
+      </div>
     </header>
 
     <div class="banner" id="banner" hidden>
@@ -36,7 +41,7 @@
         <div class="me" id="me"></div>
         <div id="peers"></div>
       </div>
-      <p class="empty" id="empty">Mở <b>MikDrop</b> trên thiết bị khác cùng mạng Wi-Fi để bắt đầu.</p>
+      <p class="empty" id="empty">Mở <b>MikDrop</b> trên thiết bị khác cùng mạng Wi-Fi để bắt đầu.<br><button class="link" id="empty-qr" type="button">Hiện mã QR để mở trên iPhone</button></p>
     </main>
 
     <section class="tray" id="tray" hidden></section>
@@ -113,6 +118,20 @@
         <button class="btn primary" type="submit">Lưu</button>
       </div>
     </form>
+  </div>
+
+  <!-- Mời thiết bị bằng mã QR -->
+  <div class="overlay center" id="invite" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="invite-title">
+      <h2 id="invite-title">Mở MikDrop trên thiết bị khác</h2>
+      <p class="muted" id="invite-hint">Kết nối cùng Wi-Fi, mở app Camera trên iPhone rồi quét mã bên dưới.</p>
+      <div class="qr" id="qr-box"><img id="qr-img" alt="Mã QR mở MikDrop"></div>
+      <div class="invite-url" id="invite-url"></div>
+      <div class="urls" id="invite-urls"></div>
+      <div class="actions">
+        <button class="btn primary" id="invite-close" type="button">Xong</button>
+      </div>
+    </div>
   </div>
 
   <!-- Mã phòng -->

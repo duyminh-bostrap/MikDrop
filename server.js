@@ -111,6 +111,17 @@ if (sea) {
 }
 app.get('/healthz', (req, res) => res.type('text').send('ok'));
 app.get('/api/config', (req, res) => res.json({ iceServers: ICE_SERVERS, relay: RELAY_ENABLED }));
+// Mã QR dạng SVG cho giao diện web ("Mời thiết bị"). Sinh trên server nên chạy được khi không có Internet.
+app.get('/api/qr.svg', async (req, res) => {
+  const text = String(req.query.u || '');
+  if (!text || text.length > 300) return res.status(400).type('text').send('bad request');
+  try {
+    const svg = await require('qrcode').toString(text, { type: 'svg', margin: 2, errorCorrectionLevel: 'M' });
+    res.type('image/svg+xml').set('Cache-Control', 'no-store').send(svg);
+  } catch (err) {
+    res.status(500).type('text').send('qr error');
+  }
+});
 app.get('/api/info', (req, res) => {
   const scheme = USE_HTTPS ? 'https' : 'http';
   res.json({
