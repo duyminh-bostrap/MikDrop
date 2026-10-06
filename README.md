@@ -88,7 +88,7 @@ npm run build:exe
 Kết quả nằm ở `dist/MikDrop.exe`. Copy file này sang bất kỳ máy Windows nào rồi dùng.
 
 **Dùng:**
-1. Bấm đúp `MikDrop.exe`. Một cửa sổ đen hiện ra với địa chỉ và mã QR, đồng thời trình duyệt tự mở `http://localhost:3000`.
+1. Bấm đúp `MikDrop.exe`. Trình duyệt tự mở `http://localhost:3000` và **hiện sẵn mã QR** để iPhone quét (mở lại bất cứ lúc nào bằng nút QR ở góc trên bên phải). Cửa sổ đen cũng in địa chỉ và mã QR.
 2. Windows hỏi về tường lửa: tick **Mạng riêng tư (Private networks)** rồi bấm **Cho phép**, để các thiết bị khác truy cập được.
 3. Trên iPhone/Mac, quét mã QR hoặc mở địa chỉ `http://<IP>:3000` được in trong cửa sổ.
 4. Giữ cửa sổ mở trong lúc dùng. Đóng cửa sổ là tắt MikDrop.
