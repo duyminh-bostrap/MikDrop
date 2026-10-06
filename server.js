@@ -44,7 +44,8 @@ const RELAY_ENABLED = process.env.RELAY !== '0';           // RELAY=0 tắt ch�
 const MAX_PEERS_PER_ROOM = Number(process.env.MAX_PEERS_PER_ROOM) || 50;
 
 const DEFAULT_ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
-let ICE_SERVERS = DEFAULT_ICE;
+// Chạy trong LAN: không cần STUN (và hoạt động được cả khi mất Internet). Chạy trên Internet: dùng STUN.
+let ICE_SERVERS = CLOUD ? DEFAULT_ICE : [];
 try {
   if (process.env.ICE_SERVERS) ICE_SERVERS = JSON.parse(process.env.ICE_SERVERS); // có thể thêm TURN
 } catch (err) {

@@ -112,7 +112,8 @@
   const transfers = new Map();  // transferId -> transfer
   const incoming = [];          // các yêu cầu đang chờ người dùng quyết định
   let pending = [];             // tệp đã chọn nhưng chưa gửi
-  let sheetPeerId = null;
+  let sheetPeerId = null;       // thiết bị được chạm để mở bảng gửi (dùng làm cờ "bảng đang mở")
+  const sheetTargets = new Set(); // các thiết bị sẽ nhận (có thể chọn nhiều)
 
   // ------------------------------------------------------------------ Socket
   const socket = io({ transports: ['websocket', 'polling'], reconnectionDelayMax: 3000 });
@@ -207,6 +208,7 @@
       peersEl.appendChild(el);
     }
     $('#empty').hidden = peers.size > 0;
+    if (typeof sheet !== 'undefined' && !sheet.hidden) renderSheet();
   }
 
   peersEl.addEventListener('click', (e) => {
@@ -317,26 +319,46 @@
     const p = peers.get(peerId);
     if (!p) return;
     sheetPeerId = peerId;
-    $('#sheet-avatar').innerHTML = ICONS[p.type] || ICONS.desktop;
-    $('#sheet-title').textContent = `Gửi tới ${p.name}`;
+    sheetTargets.clear();
+    sheetTargets.add(peerId);
     sheet.hidden = false;
     renderSheet();
     renderBanner();
   }
   function closeSheet() {
     sheetPeerId = null;
+    sheetTargets.clear();
     sheet.hidden = true;
     renderBanner();
   }
 
   function renderSheet() {
-    if (sheet.hidden && !sheetPeerId) return;
+    if (sheet.hidden) return;
+    // Bỏ các thiết bị đã rời mạng khỏi danh sách nhận
+    for (const id of [...sheetTargets]) if (!peers.has(id)) sheetTargets.delete(id);
+    if (!peers.size) { closeSheet(); return; }
+
+    const chosen = [...sheetTargets].map((id) => peers.get(id));
+    const first = chosen[0];
+    $('#sheet-avatar').innerHTML = first ? ICONS[first.type] || ICONS.desktop : ICONS.desktop;
+    $('#sheet-title').textContent = !chosen.length ? 'Chọn thiết bị nhận' : chosen.length === 1 ? `Gửi tới ${first.name}` : `Gửi tới ${chosen.length} thiết bị`;
+
+    // Danh sách thiết bị: chạm để chọn/bỏ chọn (chỉ hiện khi có từ 2 thiết bị trở lên)
+    const targets = $('#sheet-targets');
+    targets.hidden = peers.size < 2;
+    if (peers.size >= 2) {
+      const all = sheetTargets.size === peers.size;
+      targets.innerHTML =
+        [...peers.values()].map((p) => `<button type="button" class="target${sheetTargets.has(p.id) ? ' on' : ''}" data-id="${esc(p.id)}" aria-pressed="${sheetTargets.has(p.id)}"><span class="mini">${ICONS[p.type] || ICONS.desktop}</span><span class="tn">${esc(p.name)}</span></button>`).join('') +
+        `<button type="button" class="target all" data-all="1">${all ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</button>`;
+    }
+
     const list = $('#sheet-list');
     const total = pending.reduce((s, f) => s + f.size, 0);
     $('#sheet-sub').textContent = pending.length ? `${describeFiles(pending)} · ${fmtBytes(total)}` : 'Chưa chọn tệp nào';
     $('#sheet-empty').hidden = pending.length > 0;
-    $('#sheet-send').disabled = pending.length === 0;
-    $('#sheet-send').textContent = pending.length ? `Gửi ${pending.length} tệp` : 'Gửi';
+    $('#sheet-send').disabled = pending.length === 0 || chosen.length === 0;
+    $('#sheet-send').textContent = !pending.length ? 'Gửi' : chosen.length > 1 ? `Gửi ${pending.length} tệp tới ${chosen.length} máy` : `Gửi ${pending.length} tệp`;
 
     list.innerHTML = '';
     pending.slice(0, 200).forEach((f, i) => {
@@ -367,16 +389,28 @@
     pending.splice(Number(b.dataset.i), 1);
     renderSheet();
   });
+  $('#sheet-targets').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.all) {
+      if (sheetTargets.size === peers.size) sheetTargets.clear();
+      else peers.forEach((_, id) => sheetTargets.add(id));
+    } else if (!sheetTargets.delete(b.dataset.id)) {
+      sheetTargets.add(b.dataset.id);
+    }
+    renderSheet();
+  });
   $('#sheet-cancel').addEventListener('click', closeSheet);
   sheet.addEventListener('click', (e) => { if (e.target === sheet) closeSheet(); });
   $('#sheet-send').addEventListener('click', () => {
-    const p = peers.get(sheetPeerId);
-    if (!p) { toast('Thiết bị này không còn trong mạng.', true); closeSheet(); return; }
+    const targets = [...sheetTargets].map((id) => peers.get(id)).filter(Boolean);
+    if (!targets.length) { toast('Hãy chọn ít nhất một thiết bị nhận.', true); return; }
     if (!pending.length) return;
     const files = pending;
     pending = [];
     closeSheet();
-    startSend(p, files);
+    // Mỗi thiết bị có một lần truyền P2P riêng, chạy song song
+    targets.forEach((p) => startSend(p, files));
   });
 
   // ------------------------------------------------------------------ Phía gửi

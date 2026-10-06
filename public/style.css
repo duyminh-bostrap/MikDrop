@@ -213,6 +213,18 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .sheet-head .avatar { width: 52px; height: 52px; }
 .sheet-head h2 { margin: 0; font-size: 18px; }
 .sheet-head p { margin: 3px 0 0; font-size: 13.5px; color: var(--muted); }
+.targets { display: flex; gap: 8px; overflow-x: auto; margin-top: 16px; padding-bottom: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.targets::-webkit-scrollbar { display: none; }
+.target {
+  flex: none; display: inline-flex; align-items: center; gap: 8px; max-width: 200px; padding: 5px 14px 5px 5px; border-radius: 99px;
+  background: var(--line); border: 1.5px solid transparent; font-size: 14px; font-weight: 500; transition: background 0.15s, border-color 0.15s;
+}
+.target .mini { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--line); color: var(--muted); flex: none; }
+.target .mini svg { width: 16px; height: 16px; }
+.target .tn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.target.on { background: rgba(255, 106, 31, 0.16); border-color: var(--accent); }
+.target.on .mini { background: linear-gradient(145deg, var(--accent), var(--accent2)); color: #fff; }
+.target.all { padding: 5px 14px; color: var(--accent); font-weight: 600; background: none; }
 .pick-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
 .pick {
   display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 8px; border-radius: 16px;

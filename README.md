@@ -74,6 +74,12 @@ npm run start:https
 
 rồi mở `https://<IP>:3000` trên iPhone, chọn **Nâng cao → Tiếp tục truy cập** (chứng chỉ tự ký, lưu trong `.cert/`). Khi nhận tệp sẽ có nút **Lưu vào Ảnh / Tệp**. Nếu dùng HTTP thường, iPhone vẫn nhận được và lưu qua trình tải xuống của Safari (vào app Tệp).
 
+## Khi không có Internet
+
+- Bản chạy tại nhà (`npm start`) **không cần Internet**, chỉ cần các thiết bị cùng mạng cục bộ (router không nối Internet vẫn được). Giao diện không tải gì từ CDN.
+- Không có router: bật **Mobile Hotspot** trên PC (Windows: Settings → Network & internet → Mobile hotspot) hoặc **Personal Hotspot** trên iPhone, cho các thiết bị kết nối vào, rồi mở địa chỉ IP của máy chạy server (thường `http://192.168.137.1:3000` với hotspot Windows).
+- Bản trên Render **cần Internet** vì server nằm trên mạng ngoài.
+
 ## Triển khai lên Internet (không cần bật PC)
 
 Server chỉ làm discovery và báo hiệu nên rất nhẹ, chạy tốt trên gói miễn phí. Khi đó bạn có một địa chỉ cố định (ví dụ `https://mikdrop.onrender.com`) và có HTTPS thật, nên iPhone có nút **Lưu vào Ảnh** mà không cần bỏ qua cảnh báo chứng chỉ.
