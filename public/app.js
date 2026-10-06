@@ -11,6 +11,11 @@
 (() => {
   'use strict';
 
+  if (typeof io === 'undefined') {
+    document.body.innerHTML = '<p style="padding:32px;font:16px sans-serif;color:#fff4ec">Không tải được thư viện kết nối (Socket.io). Hãy tải lại trang (Ctrl+F5) hoặc kiểm tra server MikDrop còn đang chạy.</p>';
+    return;
+  }
+
   // ------------------------------------------------------------------ Hằng số
   const CHUNK = 64 * 1024;            // mảnh gửi qua DataChannel (an toàn với mọi trình duyệt)
   const RELAY_CHUNK = 256 * 1024;     // mảnh gửi qua server ở chế độ dự phòng

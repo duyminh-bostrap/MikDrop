@@ -401,6 +401,7 @@ function printBanner() {
 
   const server = await createServer();
   const io = new Server(server, {
+    serveClient: false, // file client nằm ở public/vendor/ (trong bản exe không có file thật để Socket.io tự đọc)
     maxHttpBufferSize: 8 * 1024 * 1024, // đủ cho các mảnh relay 256KB + ảnh xem trước
     pingInterval: 10000,
     pingTimeout: 20000,

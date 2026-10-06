@@ -69,6 +69,11 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .invite-url { font-weight: 600; font-size: 15px; word-break: break-all; padding: 0 6px; }
 .urls { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
 .urls .target { padding: 6px 12px; font-size: 13px; }
+.help { text-align: left; margin-top: 14px; font-size: 13px; color: var(--muted); }
+.help summary { cursor: pointer; text-align: center; color: var(--accent); font-weight: 600; }
+.help ul { margin: 10px 0 0; padding-left: 18px; line-height: 1.5; }
+.help li { margin-bottom: 6px; }
+.help code { display: block; margin-top: 4px; padding: 8px; border-radius: 8px; background: var(--line); color: var(--text); font-size: 12px; word-break: break-all; user-select: all; }
 .empty .link { pointer-events: auto; margin-top: 6px; }
 .banner {
   margin-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -264,6 +269,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 }
 
 .dialog { max-width: 400px; border-radius: 26px; padding: 26px 22px 20px; text-align: center; animation: zoom 0.25s cubic-bezier(0.2, 1.2, 0.4, 1) both; }
+.dialog { max-height: 92dvh; overflow-y: auto; }
 .dialog.small { text-align: left; }
 @keyframes zoom { from { transform: scale(0.88); opacity: 0; } }
 .dialog h2 { margin: 0 0 4px; font-size: 19px; line-height: 1.3; }
