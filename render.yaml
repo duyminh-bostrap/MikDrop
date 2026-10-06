@@ -10,8 +10,8 @@ services:
     envVars:
       - key: TRUST_PROXY   # đứng sau proxy của Render: lấy IP thiết bị từ X-Forwarded-For
         value: "1"
-      - key: PROXY_HOPS    # Render: client -> Cloudflare -> LB nội bộ -> server
-        value: "3"
+      - key: TRUSTED_IP_HEADER   # Cloudflare của Render đặt IP thật vào header này
+        value: cf-connecting-ip
       - key: NODE_VERSION
         value: "22"
       # - key: RELAY        # đặt "0" để tắt chế độ dự phòng, tiết kiệm băng thông

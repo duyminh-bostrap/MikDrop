@@ -95,7 +95,8 @@ Fly.io, Railway... cũng chạy được: đặt biến môi trường `TRUST_PR
 |---|---|
 | `PORT` | Cổng lắng nghe (nền tảng thường tự đặt) |
 | `TRUST_PROXY=1` | Bắt buộc khi đứng sau proxy: lấy IP thật từ `X-Forwarded-For` và tắt mDNS/QR |
-| `PROXY_HOPS` | Số proxy tin cậy đứng trước server, dùng để lấy IP thật từ `X-Forwarded-For` mà client không giả được. Mặc định 3 trên Render (tự nhận qua biến `RENDER`), 1 ở nơi khác |
+| `TRUSTED_IP_HEADER` | Header do proxy đặt chứa IP thật của thiết bị, client không giả được (Render: `cf-connecting-ip`, tự nhận qua biến `RENDER`) |
+| `PROXY_HOPS` | Khi không có header trên: lấy IP ở vị trí thứ N từ bên phải của `X-Forwarded-For` (mặc định 1) |
 | `RELAY=0` | Tắt chế độ dự phòng qua server, tiết kiệm băng thông |
 | `MAX_PEERS_PER_ROOM` | Số thiết bị tối đa mỗi phòng (mặc định 50) |
 | `ICE_SERVERS` | JSON danh sách STUN/TURN, ví dụ `[{"urls":"stun:stun.l.google.com:19302"}]`. Thêm TURN nếu cần truyền qua mạng khó |

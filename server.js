@@ -33,9 +33,13 @@ const MDNS_NAME = 'mikdrop.local';
 // Chế độ đám mây: server nằm sau reverse proxy (Render, Fly, Railway...) nên HTTPS do nền tảng lo,
 // địa chỉ IP thật của thiết bị lấy từ header X-Forwarded-For.
 const CLOUD = process.env.TRUST_PROXY === '1';
-// Số proxy tin cậy đứng trước server. Render đi qua Cloudflare + bộ cân bằng tải nội bộ => 3
-// (X-Forwarded-For: <client>, <Cloudflare>, <nội bộ>). Nền tảng khác thường là 1.
-const PROXY_HOPS = Number(process.env.PROXY_HOPS) || (process.env.RENDER ? 3 : 1);
+// Lấy IP thật của thiết bị khi đứng sau proxy:
+//  - TRUSTED_IP_HEADER: header do proxy đặt và client không giả được. Render đi qua Cloudflare, nơi
+//    CF-Connecting-IP luôn là IP thật (Cloudflare từ chối request nếu client tự đặt header này).
+//  - Nếu không có: dùng phần tử thứ PROXY_HOPS tính từ bên phải của X-Forwarded-For (mặc định 1 proxy).
+//    Các phần tử bên trái do client tự khai nên không tin.
+const TRUSTED_IP_HEADER = (process.env.TRUSTED_IP_HEADER || (process.env.RENDER ? 'cf-connecting-ip' : '')).toLowerCase();
+const PROXY_HOPS = Number(process.env.PROXY_HOPS) || 1;
 const RELAY_ENABLED = process.env.RELAY !== '0';           // RELAY=0 tắt chế độ dự phòng (tiết kiệm băng thông)
 const MAX_PEERS_PER_ROOM = Number(process.env.MAX_PEERS_PER_ROOM) || 50;
 
@@ -135,12 +139,15 @@ const publicPeer = (p) => ({ id: p.id, name: p.name, type: p.type });
 function clientIp(socket) {
   let ip = socket.handshake.address || '';
   if (CLOUD) {
-    // Client có thể tự chèn các phần tử đầu của X-Forwarded-For nên KHÔNG tin phần tử đầu tiên.
-    // Mỗi proxy tin cậy nối thêm IP của hop trước vào cuối, vì vậy lấy phần tử thứ PROXY_HOPS tính từ bên phải.
-    const xff = socket.handshake.headers['x-forwarded-for'];
-    if (xff) {
-      const parts = String(xff).split(',').map((s) => s.trim()).filter(Boolean);
-      ip = parts[Math.max(0, parts.length - PROXY_HOPS)] || ip;
+    const trusted = TRUSTED_IP_HEADER && socket.handshake.headers[TRUSTED_IP_HEADER];
+    if (trusted) {
+      ip = String(trusted).trim();
+    } else {
+      const xff = socket.handshake.headers['x-forwarded-for'];
+      if (xff) {
+        const parts = String(xff).split(',').map((p) => p.trim()).filter(Boolean);
+        ip = parts[Math.max(0, parts.length - PROXY_HOPS)] || ip;
+      }
     }
   }
   return ip.replace(/^::ffff:/i, '').replace(/%.*$/, '');
@@ -207,8 +214,6 @@ function attachSignaling(io) {
       );
       socket.to(room).emit(isNew ? 'peer-joined' : 'peer-updated', publicPeer(peer));
     });
-
-    socket.on('whoami-tmp', (ack) => typeof ack === 'function' && ack({ xff: socket.handshake.headers['x-forwarded-for'], cf: socket.handshake.headers['cf-connecting-ip'], tci: socket.handshake.headers['true-client-ip'], addr: socket.handshake.address }));
 
     socket.on('rename', (name) => {
       const peer = peers.get(socket.id);
