@@ -79,6 +79,7 @@ const app = express();
 app.disable('x-powered-by');
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
 app.get('/healthz', (req, res) => res.type('text').send('ok'));
+app.get('/api/whoami-tmp', (req, res) => res.json({ xff: req.headers['x-forwarded-for'], addr: req.socket.remoteAddress, cf: req.headers['cf-connecting-ip'], tci: req.headers['true-client-ip'] }));
 app.get('/api/config', (req, res) => res.json({ iceServers: ICE_SERVERS, relay: RELAY_ENABLED }));
 app.get('/api/info', (req, res) => {
   const scheme = USE_HTTPS ? 'https' : 'http';
