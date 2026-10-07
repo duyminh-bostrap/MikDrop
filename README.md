@@ -1,6 +1,6 @@
 # MikDrop
 
-Chia sẻ ảnh và tệp ngang hàng (P2P) giữa iPhone, MacBook, Windows và Linux qua Wi-Fi cục bộ, chỉ cần trình duyệt, không cần cài app. Giao diện lấy cảm hứng từ AirDrop.
+Chia sẻ ảnh và tệp ngang hàng (P2P) giữa iPhone, Android, MacBook, Windows và Linux qua Wi-Fi cục bộ, chỉ cần trình duyệt, không cần cài app. Giao diện lấy cảm hứng từ AirDrop.
 
 - **Tự động phát hiện thiết bị** cùng mạng (radar).
 - **Truyền P2P bằng WebRTC DataChannel**: tệp đi thẳng giữa hai thiết bị, server không lưu tệp.
@@ -53,6 +53,15 @@ Cùng lúc đó là mã QR để quét bằng iPhone.
 4. Bên nhận bấm **Chấp nhận**. Tệp được tải về và lưu tự động.
 
 Mẹo: chạy trên cổng 80 để bỏ phần `:3000`, ví dụ `PORT=80 npm start` (macOS/Linux cần `sudo`), khi đó dùng được `http://mikdrop.local`.
+
+### Android, ngôn ngữ và tên hiển thị
+
+- **Android:** dùng Chrome (hoặc trình duyệt Chromium khác), mở địa chỉ `http://<IP>:3000` hoặc quét mã QR bằng Camera/Google Lens. Tệp nhận được tự tải vào thư mục Tải xuống; gửi nhiều tệp thì Chrome có thể hỏi cho phép tải nhiều tệp, hãy chọn Cho phép (hoặc bấm **Lưu lại tất cả**). Có thể **Thêm vào màn hình chính** để dùng như app. Lưu ý riêng cho Android:
+  - Nếu Wi-Fi không có Internet (ví dụ hotspot hoặc router không nối mạng), Android có thể tự chuyển sang 4G/5G nên không vào được địa chỉ LAN. Hãy tắt dữ liệu di động, hoặc chọn **Giữ kết nối Wi-Fi** khi được hỏi.
+  - `mikdrop.local` thường không phân giải được trên Android, hãy dùng địa chỉ IP hoặc mã QR.
+  - Giữ màn hình sáng khi gửi tệp lớn. Wake Lock chỉ hoạt động trên HTTPS hoặc localhost (`--https` hoặc bản Render).
+- **Cài đặt** (biểu tượng bánh răng ở góc trên, hoặc bấm vào dòng *Bạn hiển thị là*): chọn **Tiếng Việt / English** và **tên hiển thị**. Lần đầu, ngôn ngữ theo ngôn ngữ của trình duyệt.
+- **Tên mặc định là tên máy:** trình duyệt không tự biết tên máy nên MikDrop lấy như sau. Máy chạy MikDrop dùng hostname (ví dụ `DESKTOP-ABC123`); thiết bị khác trong LAN dùng tên mà router đặt cho máy (nếu router hỗ trợ, nhiều iPhone/Android đăng ký tên này khi xin IP); điện thoại Android mở qua HTTPS hoặc localhost dùng model máy; còn lại là tên tạm kiểu `iPhone AB`. Muốn tự đặt tên, gõ vào ô *Tên hiển thị*. Bấm **Dùng tên máy** để quay lại tên tự động. Khi chạy trên Internet (bản Render/VPS), server không gửi hostname của nó cho ai.
 
 ### Windows: mở tường lửa
 

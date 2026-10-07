@@ -164,6 +164,35 @@ app.post('/api/speedtest/up', (req, res) => {
   req.on('end', () => res.set('Cache-Control', 'no-store').json({ bytes }));
   req.on('error', () => res.end());
 });
+// Tên máy của thiết bị đang gọi, để làm tên hiển thị mặc định:
+//  - chính máy chạy MikDrop: hostname (ví dụ DESKTOP-ABC123, mike-laptop)
+//  - thiết bị khác trong LAN: tên router đặt cho máy qua DNS ngược (nếu có; iPhone/Android hay đăng ký tên này khi xin IP)
+// Trình duyệt không tự biết được tên máy nên phải hỏi server. Chế độ đám mây không trả gì (hostname của server không phải của ai).
+const shortHost = (h) => cleanName(String(h || '').trim().split('.')[0]);
+const nameCache = new Map(); // ip -> { name, at }
+async function machineNameFor(addr) {
+  if (CLOUD) return null;
+  const ip = String(addr || '').replace(/^::ffff:/i, '');
+  if (isHostAddress(ip)) return shortHost(os.hostname()) || null;
+  const hit = nameCache.get(ip);
+  if (hit && Date.now() - hit.at < 300000) return hit.name;
+  let name = null;
+  try {
+    const hosts = await Promise.race([
+      require('dns').promises.reverse(ip),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1200)),
+    ]);
+    const first = shortHost(hosts && hosts[0]);
+    // Bỏ tên kiểu "192-168-1-5" hoặc "ip-10-0-0-5" (router tự đặt theo địa chỉ, không phải tên máy)
+    if (first && !/^(ip-)?\d+[-.]\d+[-.]\d+[-.]\d+$/i.test(first)) name = first;
+  } catch (err) { /* không có bản ghi: dùng tên mặc định */ }
+  if (nameCache.size > 500) nameCache.clear();
+  nameCache.set(ip, { name, at: Date.now() });
+  return name;
+}
+app.get('/api/whoami', async (req, res) => {
+  res.set('Cache-Control', 'no-store').json({ machineName: await machineNameFor(req.socket.remoteAddress) });
+});
 app.get('/api/info', (req, res) => {
   const scheme = USE_HTTPS ? 'https' : 'http';
   res.json({
@@ -215,6 +244,7 @@ async function createServer() {
 // ---------------------------------------------------------------------------
 // Signaling
 // ---------------------------------------------------------------------------
+const isHostAddress = (addr) => /^(127\.|::1$)/.test(addr) || getLanInterfaces().some((i) => i.address === addr);
 const DEVICE_TYPES = new Set(['phone', 'tablet', 'laptop', 'desktop']);
 const peers = new Map(); // socket.id -> { id, name, type, room }
 
@@ -224,9 +254,7 @@ const publicPeer = (p) => ({ id: p.id, name: p.name, type: p.type, host: p.host 
 // Thiết bị này có phải chính máy đang chạy server không (mở bằng localhost hoặc bằng IP LAN của máy)?
 // Chỉ có nghĩa khi chạy trong mạng nội bộ. Trên Internet (CLOUD) server không phải thiết bị của ai.
 function isServerHost(socket) {
-  if (CLOUD) return false;
-  const addr = String(socket.handshake.address || '').replace(/^::ffff:/i, '');
-  return /^(127\.|::1$)/.test(addr) || getLanInterfaces().some((i) => i.address === addr);
+  return !CLOUD && isHostAddress(String(socket.handshake.address || '').replace(/^::ffff:/i, ''));
 }
 
 // --- Phòng: thiết bị chỉ thấy nhau khi cùng phòng --------------------------
@@ -290,14 +318,14 @@ function attachSignaling(io) {
         io.to(prev.room).emit('peer-left', { id: socket.id });
       }
       if (!peers.has(socket.id) && roomSize(room) >= MAX_PEERS_PER_ROOM) {
-        socket.emit('join-error', { message: 'Phòng đã đầy.' });
+        socket.emit('join-error', { code: 'full', message: 'Room is full.' });
         return;
       }
 
       const peer = {
         id: socket.id,
         room,
-        name: cleanName(info && info.name) || 'Thiết bị',
+        name: cleanName(info && info.name) || 'Device',
         type: DEVICE_TYPES.has(info && info.type) ? info.type : 'desktop',
         host: isServerHost(socket),
       };

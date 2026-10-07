@@ -22,16 +22,19 @@
         <span class="brand-name">MikDrop</span>
       </div>
       <div class="top-right">
-        <button class="qrbtn" id="invitebtn" type="button" aria-label="Hiện mã QR để mở trên thiết bị khác" title="Mời thiết bị bằng mã QR">
+        <button class="qrbtn" id="settingsbtn" type="button" data-i18n-attr="aria-label:top.settings;title:top.settings" aria-label="Cài đặt" title="Cài đặt">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 7.4l2.1 1.2M17.4 15.4l2.1 1.2M4.5 16.6l2.1-1.2M17.4 8.6l2.1-1.2"/></svg>
+        </button>
+        <button class="qrbtn" id="invitebtn" type="button" data-i18n-attr="aria-label:top.invite;title:top.inviteTitle" aria-label="Hiện mã QR để mở trên thiết bị khác" title="Mời thiết bị bằng mã QR">
           <svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2v2h-2zM18.5 14.5h2M14.5 18.5h2M18.5 18.5h2v2"/></svg>
         </button>
-        <div class="status" id="status"><i></i><span>Đang kết nối…</span></div>
+        <div class="status" id="status"><i></i><span data-i18n="status.connecting">Đang kết nối…</span></div>
       </div>
     </header>
 
     <div class="banner" id="banner" hidden>
       <span id="banner-text"></span>
-      <button class="link" id="banner-clear" type="button">Bỏ chọn</button>
+      <button class="link" id="banner-clear" type="button" data-i18n="banner.clear">Bỏ chọn</button>
     </div>
 
     <main class="stage-wrap">
@@ -41,26 +44,26 @@
         <div class="me" id="me"></div>
         <div id="peers"></div>
       </div>
-      <p class="empty" id="empty">Mở <b>MikDrop</b> trên thiết bị khác cùng mạng Wi-Fi để bắt đầu.<br><button class="link" id="empty-qr" type="button">Hiện mã QR để mở trên iPhone</button></p>
+      <p class="empty" id="empty"><span data-i18n-html="empty.text">Mở <b>MikDrop</b> trên thiết bị khác cùng mạng Wi-Fi để bắt đầu.</span><br><button class="link" id="empty-qr" type="button" data-i18n="empty.qr">Hiện mã QR để mở trên điện thoại</button></p>
     </main>
 
     <section class="tray" id="tray" hidden></section>
 
     <footer class="foot">
-      <button class="whoami" id="whoami" type="button" title="Đổi tên thiết bị">
-        Bạn hiển thị là <b id="my-name"></b>
+      <button class="whoami" id="whoami" type="button" data-i18n-attr="title:foot.nameTitle" title="Đổi tên thiết bị và ngôn ngữ">
+        <span data-i18n="foot.youAre">Bạn hiển thị là</span> <b id="my-name"></b>
         <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z"/></svg>
       </button>
-      <button class="whoami" id="quitbtn" type="button" hidden>Thoát MikDrop</button>
-      <button class="whoami" id="speedbtn" type="button">Đo tốc độ mạng</button>
-      <button class="whoami" id="roombtn" type="button" title="Kết nối thiết bị ở mạng khác bằng mã phòng">
+      <button class="whoami" id="quitbtn" type="button" data-i18n="foot.quit" hidden>Thoát MikDrop</button>
+      <button class="whoami" id="speedbtn" type="button" data-i18n="foot.speed">Đo tốc độ mạng</button>
+      <button class="whoami" id="roombtn" type="button" data-i18n-attr="title:foot.roomTitle" title="Kết nối thiết bị ở mạng khác bằng mã phòng">
         <span id="room-label">Cùng mạng Wi-Fi</span>
         <svg viewBox="0 0 24 24"><path d="M9.5 14.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14.5 9.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
       </button>
     </footer>
   </div>
 
-  <div class="dropveil" id="dropveil" hidden><div>Thả tệp để chọn</div></div>
+  <div class="dropveil" id="dropveil" hidden><div data-i18n="drop.veil">Thả tệp để chọn</div></div>
 
   <!-- Bảng gửi tệp -->
   <div class="overlay" id="sheet" hidden>
@@ -77,17 +80,17 @@
       <div class="pick-row">
         <button class="pick" id="pick-photos" type="button">
           <svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m4 17 5-4.5 3.5 3L16 12l4 4.5"/></svg>
-          Ảnh &amp; video
+          <span data-i18n="pick.photos">Ảnh &amp; video</span>
         </button>
         <button class="pick" id="pick-files" type="button">
           <svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5"/></svg>
-          Tệp
+          <span data-i18n="pick.files">Tệp</span>
         </button>
       </div>
       <div class="file-list" id="sheet-list"></div>
-      <div class="sheet-empty" id="sheet-empty">Chọn ảnh, tệp hoặc kéo thả vào đây</div>
+      <div class="sheet-empty" id="sheet-empty" data-i18n="sheet.empty">Chọn ảnh, tệp hoặc kéo thả vào đây</div>
       <div class="actions">
-        <button class="btn" id="sheet-cancel" type="button">Huỷ</button>
+        <button class="btn" id="sheet-cancel" type="button" data-i18n="sheet.cancel">Huỷ</button>
         <button class="btn primary" id="sheet-send" type="button" disabled>Gửi</button>
       </div>
     </div>
@@ -102,22 +105,25 @@
       <div class="previews" id="in-previews"></div>
       <ul class="names" id="in-names"></ul>
       <div class="actions">
-        <button class="btn" id="in-decline" type="button">Từ chối</button>
-        <button class="btn primary" id="in-accept" type="button">Chấp nhận</button>
+        <button class="btn" id="in-decline" type="button" data-i18n="in.decline">Từ chối</button>
+        <button class="btn primary" id="in-accept" type="button" data-i18n="in.accept">Chấp nhận</button>
       </div>
       <p class="queue" id="in-queue" hidden></p>
     </div>
   </div>
 
-  <!-- Đổi tên -->
-  <div class="overlay center" id="rename" hidden>
-    <form class="dialog small" id="rename-form" autocomplete="off">
-      <h2>Tên thiết bị</h2>
-      <p class="muted">Tên này hiện cho các thiết bị khác thấy bạn.</p>
-      <input id="rename-input" maxlength="40" placeholder="Ví dụ: iPhone của An" enterkeyhint="done">
+  <!-- Cài đặt: ngôn ngữ và tên hiển thị -->
+  <div class="overlay center" id="settings" hidden>
+    <form class="dialog small" id="settings-form" autocomplete="off">
+      <h2 data-i18n="set.title">Cài đặt</h2>
+      <label class="field-label" data-i18n="set.language">Ngôn ngữ</label>
+      <div class="seg" id="lang-seg"></div>
+      <label class="field-label" for="name-input" data-i18n="set.name">Tên hiển thị</label>
+      <input id="name-input" maxlength="40" data-i18n-attr="placeholder:set.namePh" placeholder="Ví dụ: iPhone của An" enterkeyhint="done">
+      <button class="link" id="use-machine" type="button" hidden></button>
+      <p class="muted hint" id="name-hint"></p>
       <div class="actions">
-        <button class="btn" id="rename-cancel" type="button">Huỷ</button>
-        <button class="btn primary" type="submit">Lưu</button>
+        <button class="btn primary" type="submit" data-i18n="set.done">Xong</button>
       </div>
     </form>
   </div>
@@ -125,16 +131,16 @@
   <!-- Đo tốc độ mạng -->
   <div class="overlay center" id="speed" hidden>
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="speed-title">
-      <h2 id="speed-title">Đo tốc độ mạng</h2>
-      <p class="muted">Đo giữa thiết bị này và máy chạy MikDrop. Đây cũng là tốc độ tối đa khi gửi tệp giữa hai thiết bị.</p>
+      <h2 id="speed-title" data-i18n="sp.title">Đo tốc độ mạng</h2>
+      <p class="muted" data-i18n="sp.desc">Đo giữa thiết bị này và máy chạy MikDrop. Đây cũng là tốc độ tối đa khi gửi tệp giữa hai thiết bị.</p>
       <div class="speed-grid">
-        <div><span class="k">Độ trễ</span><b id="sp-ping">–</b></div>
-        <div><span class="k">Tải xuống</span><b id="sp-down">–</b></div>
-        <div><span class="k">Tải lên</span><b id="sp-up">–</b></div>
+        <div><span class="k" data-i18n="sp.ping">Độ trễ</span><b id="sp-ping">–</b></div>
+        <div><span class="k" data-i18n="sp.down">Tải xuống</span><b id="sp-down">–</b></div>
+        <div><span class="k" data-i18n="sp.up">Tải lên</span><b id="sp-up">–</b></div>
       </div>
       <p class="speed-note" id="sp-note"></p>
       <div class="actions">
-        <button class="btn" id="speed-close" type="button">Đóng</button>
+        <button class="btn" id="speed-close" type="button" data-i18n="sp.close">Đóng</button>
         <button class="btn primary" id="speed-run" type="button">Đo lại</button>
       </div>
     </div>
@@ -143,22 +149,24 @@
   <!-- Mời thiết bị bằng mã QR -->
   <div class="overlay center" id="invite" hidden>
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="invite-title">
-      <h2 id="invite-title">Mở MikDrop trên thiết bị khác</h2>
-      <p class="muted" id="invite-hint">Kết nối cùng Wi-Fi, mở app Camera trên iPhone rồi quét mã bên dưới.</p>
-      <div class="qr" id="qr-box"><img id="qr-img" alt="Mã QR mở MikDrop"></div>
+      <h2 id="invite-title" data-i18n="inv.title">Mở MikDrop trên thiết bị khác</h2>
+      <p class="muted" id="invite-hint" data-i18n="inv.hint">Kết nối cùng Wi-Fi, mở app Camera trên điện thoại rồi quét mã bên dưới.</p>
+      <div class="qr" id="qr-box"><img id="qr-img" data-i18n-attr="alt:inv.alt" alt="Mã QR mở MikDrop"></div>
       <div class="invite-url" id="invite-url"></div>
       <div class="urls" id="invite-urls"></div>
       <details class="help">
-        <summary>iPhone không mở được?</summary>
+        <summary data-i18n="inv.helpTitle">Điện thoại không mở được?</summary>
         <ul>
-          <li>iPhone và máy này phải <b>cùng một Wi-Fi</b> (không dùng 4G/5G, tắt VPN, không dùng mạng "khách").</li>
-          <li>Windows: khi hiện hộp thoại tường lửa, tick <b>Mạng riêng tư</b> rồi Cho phép. Nếu đã lỡ chặn, mở PowerShell bằng quyền <b>Administrator</b> và chạy:<br><code>New-NetFirewallRule -DisplayName "MikDrop" -Direction Inbound -Protocol TCP -LocalPort 3000-3010 -Action Allow -Profile Private,Public</code></li>
-          <li>Mạng Wi-Fi của máy này nên đặt là <b>Private</b> (Settings → Network &amp; internet → Wi-Fi → thuộc tính).</li>
-          <li>Nếu địa chỉ có nhiều lựa chọn, thử từng địa chỉ ở trên. Router bật "AP isolation" cũng sẽ chặn.</li>
+          <li data-i18n-html="inv.help1"></li>
+          <li data-i18n-html="inv.helpAndroid"></li>
+          <li data-i18n-html="inv.help2"></li>
+          <li data-i18n-html="inv.help3"></li>
+          <li data-i18n-html="inv.help4"></li>
+          <li data-i18n-html="inv.help5"></li>
         </ul>
       </details>
       <div class="actions">
-        <button class="btn primary" id="invite-close" type="button">Xong</button>
+        <button class="btn primary" id="invite-close" type="button" data-i18n="inv.done">Xong</button>
       </div>
     </div>
   </div>
@@ -166,16 +174,16 @@
   <!-- Mã phòng -->
   <div class="overlay center" id="room" hidden>
     <form class="dialog small" id="room-form" autocomplete="off">
-      <h2>Kết nối thiết bị</h2>
-      <p class="muted">Mặc định MikDrop tự tìm các thiết bị cùng mạng Wi-Fi với bạn. Nếu thiết bị ở mạng khác, hoặc không thấy nhau, hãy nhập chung một mã phòng.</p>
-      <input id="room-input" maxlength="24" placeholder="Mã phòng, ví dụ: nha-an-123" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <h2 data-i18n="room.title">Kết nối thiết bị</h2>
+      <p class="muted" data-i18n="room.desc">Mặc định MikDrop tự tìm các thiết bị cùng mạng Wi-Fi với bạn. Nếu thiết bị ở mạng khác, hoặc không thấy nhau, hãy nhập chung một mã phòng.</p>
+      <input id="room-input" maxlength="24" data-i18n-attr="placeholder:room.placeholder" placeholder="Mã phòng, ví dụ: nha-an-123" autocapitalize="off" autocorrect="off" spellcheck="false">
       <div class="room-tools">
-        <button class="link" id="room-random" type="button">Tạo mã ngẫu nhiên</button>
-        <button class="link" id="room-invite" type="button">Gửi liên kết mời</button>
+        <button class="link" id="room-random" type="button" data-i18n="room.random">Tạo mã ngẫu nhiên</button>
+        <button class="link" id="room-invite" type="button" data-i18n="room.invite">Gửi liên kết mời</button>
       </div>
       <div class="actions">
-        <button class="btn" id="room-auto" type="button">Tự động</button>
-        <button class="btn primary" type="submit">Vào phòng</button>
+        <button class="btn" id="room-auto" type="button" data-i18n="room.btnAuto">Tự động</button>
+        <button class="btn primary" type="submit" data-i18n="room.join">Vào phòng</button>
       </div>
     </form>
   </div>
@@ -186,6 +194,7 @@
   <input class="vh" id="input-files" type="file" multiple>
 
   <script src="vendor/socket.io.min.js"></script>
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

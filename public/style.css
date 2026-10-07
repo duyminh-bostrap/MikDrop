@@ -285,6 +285,12 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
   border-radius: 12px; border: 1px solid var(--line); background: var(--bg1); outline: none;
 }
 .dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--ring); }
+.field-label { display: block; margin-top: 18px; font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--muted); }
+.field-label + input { margin-top: 8px; }
+.seg { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.seg .target { max-width: none; padding: 9px 18px; }
+.dialog .hint { margin-top: 8px; font-size: 12.5px; line-height: 1.45; }
+#use-machine { display: block; margin-top: 8px; }
 .previews { display: flex; justify-content: center; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
 .previews .pv {
   width: 74px; height: 74px; border-radius: 14px; overflow: hidden; background: var(--line);

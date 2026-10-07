@@ -11,8 +11,10 @@
 (() => {
   'use strict';
 
+  const tr = I18N.t; // dịch chuỗi (biến t trong file này dùng cho "lần truyền")
+
   if (typeof io === 'undefined') {
-    document.body.innerHTML = '<p style="padding:32px;font:16px sans-serif;color:#fff4ec">Không tải được thư viện kết nối (Socket.io). Hãy tải lại trang (Ctrl+F5) hoặc kiểm tra server MikDrop còn đang chạy.</p>';
+    document.body.innerHTML = `<p style="padding:32px;font:16px sans-serif;color:#fff4ec">${tr('lib.fail')}</p>`;
     return;
   }
 
@@ -46,7 +48,7 @@
     const units = ['KB', 'MB', 'GB', 'TB'];
     let i = -1;
     do { n /= 1024; i++; } while (n >= 1024 && i < units.length - 1);
-    return `${n.toLocaleString('vi-VN', { maximumFractionDigits: n >= 100 ? 0 : 1 })} ${units[i]}`;
+    return `${n.toLocaleString(I18N.locale, { maximumFractionDigits: n >= 100 ? 0 : 1 })} ${units[i]}`;
   }
 
   function kindOf(f) {
@@ -61,13 +63,13 @@
     const c = { image: 0, video: 0, file: 0 };
     metas.forEach((m) => c[kindOf(m)]++);
     const parts = [];
-    if (c.image) parts.push(`${c.image} hình ảnh`);
-    if (c.video) parts.push(`${c.video} video`);
-    if (c.file) parts.push(`${c.file} tệp`);
-    return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} và ${parts[parts.length - 1]}` : parts[0] || '0 tệp';
+    if (c.image) parts.push(tr('n.image', { n: c.image }));
+    if (c.video) parts.push(tr('n.video', { n: c.video }));
+    if (c.file) parts.push(tr('n.file', { n: c.file }));
+    return parts.length > 1 ? `${parts.slice(0, -1).join(', ')}${tr('n.and')}${parts[parts.length - 1]}` : parts[0] || tr('n.file', { n: 0 });
   }
 
-  const safeName = (n) => String(n || 'tệp').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 200) || 'tệp';
+  const safeName = (n) => String(n || 'file').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 200) || 'file';
 
   // ------------------------------------------------------------------ Thiết bị của mình
   const ICONS = {
@@ -89,15 +91,16 @@
     const touch = navigator.maxTouchPoints > 1;
     if (/iPhone|iPod/.test(ua)) return { type: 'phone', label: 'iPhone' };
     if (/iPad/.test(ua) || (/Macintosh/.test(ua) && touch)) return { type: 'tablet', label: 'iPad' };
-    if (/Android/.test(ua)) return /Mobile/.test(ua) ? { type: 'phone', label: 'Android' } : { type: 'tablet', label: 'Máy tính bảng' };
+    if (/Android/.test(ua)) return /Mobile/.test(ua) ? { type: 'phone', label: 'Android' } : { type: 'tablet', labelKey: 'dev.tablet' };
     if (/Macintosh|Mac OS X/.test(ua)) return { type: 'laptop', label: 'Mac' };
     if (/Windows/.test(ua)) return { type: 'desktop', label: 'Windows PC' };
     if (/CrOS/.test(ua)) return { type: 'laptop', label: 'Chromebook' };
     if (/Linux/.test(ua)) return { type: 'desktop', label: 'Linux PC' };
-    return { type: 'desktop', label: 'Thiết bị' };
+    return { type: 'desktop', labelKey: 'dev.device' };
   }
 
   const device = detectDevice();
+  const deviceLabel = () => (device.labelKey ? tr(device.labelKey) : device.label);
   const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
   const CAN_SHARE_FILES = (() => {
     try {
@@ -112,12 +115,22 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* bỏ qua */ } },
   };
 
+  // Tên hiển thị: 'auto' = tên máy (máy chạy MikDrop: hostname; điện thoại Android: model; mạng LAN: tên router đặt cho máy)
+  // hoặc tên tạm theo loại thiết bị; 'custom' = người dùng tự đặt trong Cài đặt.
+  const OLD_AUTO_NAME = /^(iPhone|iPad|Android|Mac|Windows PC|Linux PC|Chromebook|Máy tính bảng|Tablet|Thiết bị|Device) ([A-Z0-9]{2})$/;
   let myName = store.get('mikdrop.name');
-  if (!myName) {
-    const code = Math.random().toString(36).slice(2, 4).toUpperCase();
-    myName = `${device.label} ${code}`;
-    store.set('mikdrop.name', myName);
-  }
+  let nameMode = store.get('mikdrop.nameMode');
+  if (nameMode !== 'auto' && nameMode !== 'custom') nameMode = myName && !OLD_AUTO_NAME.test(myName) ? 'custom' : 'auto';
+  const nameCode = store.get('mikdrop.code') || (OLD_AUTO_NAME.exec(myName || '') || [])[2] || Math.random().toString(36).slice(2, 4).toUpperCase();
+  store.set('mikdrop.code', nameCode);
+  let serverName = null; // tên máy do server cho biết (/api/whoami)
+  let modelName = null;  // model máy Android do trình duyệt cho biết
+  const machineName = () => modelName || serverName;
+  const generatedName = () => `${deviceLabel()} ${nameCode}`;
+  const autoName = () => machineName() || generatedName();
+  if (nameMode === 'auto' || !myName) myName = autoName();
+  store.set('mikdrop.nameMode', nameMode);
+  store.set('mikdrop.name', myName);
 
   // ------------------------------------------------------------------ Trạng thái
   const peers = new Map();      // id -> { id, name, type, slot }
@@ -131,11 +144,13 @@
   const socket = io({ transports: ['websocket', 'polling'], reconnectionDelayMax: 3000 });
 
   const statusEl = $('#status');
+  let statusKind = 'connecting';
   function setStatus(kind) {
+    statusKind = kind;
     statusEl.className = 'status ' + kind;
     const n = peers.size;
     $('span', statusEl).textContent =
-      kind === 'on' ? (n ? `${n} thiết bị gần đây` : 'Sẵn sàng') : kind === 'off' ? 'Mất kết nối, đang thử lại…' : 'Đang kết nối…';
+      kind === 'on' ? (n ? tr('status.nearby', { n }) : tr('status.ready')) : kind === 'off' ? tr('status.off') : tr('status.connecting');
   }
 
   // Phòng: mặc định để trống = tự nhóm theo mạng. Có mã = chỉ thấy thiết bị cùng mã.
@@ -162,11 +177,14 @@
     socket.emit('join', { name: myName, type: device.type, room: myRoom });
     setStatus('on');
   });
+  let activeRoom = null;
+  const renderRoomLabel = () => { $('#room-label').textContent = activeRoom ? tr('room.code', { code: activeRoom }) : tr('room.auto'); };
   socket.on('room', ({ code, host }) => {
     iAmHost = !!host;
-    $('#room-label').textContent = code ? `Phòng: ${code}` : 'Cùng mạng Wi-Fi';
+    activeRoom = code || null;
+    renderRoomLabel();
   });
-  socket.on('join-error', ({ message }) => toast(message || 'Không vào được phòng.', true));
+  socket.on('join-error', ({ code, message }) => toast(code === 'full' ? tr('err.roomFull') : message || tr('err.joinFailed'), true));
   socket.on('disconnect', () => {
     peers.clear();
     renderPeers();
@@ -190,12 +208,12 @@
     renderPeers();
     setStatus('on');
     for (const t of transfers.values()) {
-      if (t.peerId === id && !TERMINAL.has(t.status)) fail(t, 'Thiết bị đã ngắt kết nối');
+      if (t.peerId === id && !TERMINAL.has(t.status)) fail(t, 'err.peerLeft');
     }
   });
   socket.on('peer-gone', ({ transferId }) => {
     const t = transfers.get(transferId);
-    if (t && !TERMINAL.has(t.status)) fail(t, 'Thiết bị đã ngắt kết nối');
+    if (t && !TERMINAL.has(t.status)) fail(t, 'err.peerLeft');
   });
 
   function addPeer(p) {
@@ -262,7 +280,7 @@
   function renderBanner() {
     const showBanner = pending.length > 0 && !sheetPeerId;
     $('#banner').hidden = !showBanner;
-    if (showBanner) $('#banner-text').textContent = `Đã chọn ${describeFiles(pending)} - chạm vào một thiết bị để gửi`;
+    if (showBanner) $('#banner-text').textContent = tr('banner.selected', { what: describeFiles(pending) });
   }
   $('#banner-clear').addEventListener('click', () => { pending = []; renderBanner(); });
 
@@ -293,7 +311,7 @@
     const el = e.target.closest && e.target.closest('.peer');
     addFiles(files);
     if (el && !sheetPeerId) openSheet(el.dataset.id);
-    else if (!peers.size) toast('Chưa có thiết bị nào gần đây để gửi.');
+    else if (!peers.size) toast(tr('toast.noPeers'));
   });
 
   // ------------------------------------------------------------------ Ảnh xem trước
@@ -359,7 +377,7 @@
     const chosen = [...sheetTargets].map((id) => peers.get(id));
     const first = chosen[0];
     $('#sheet-avatar').innerHTML = first ? ICONS[first.type] || ICONS.desktop : ICONS.desktop;
-    $('#sheet-title').textContent = !chosen.length ? 'Chọn thiết bị nhận' : chosen.length === 1 ? `Gửi tới ${first.name}` : `Gửi tới ${chosen.length} thiết bị`;
+    $('#sheet-title').textContent = !chosen.length ? tr('sheet.pickTarget') : chosen.length === 1 ? tr('sheet.to1', { name: first.name }) : tr('sheet.toN', { n: chosen.length });
 
     // Danh sách thiết bị: chạm để chọn/bỏ chọn (chỉ hiện khi có từ 2 thiết bị trở lên)
     const targets = $('#sheet-targets');
@@ -368,15 +386,15 @@
       const all = sheetTargets.size === peers.size;
       targets.innerHTML =
         [...peers.values()].map((p) => `<button type="button" class="target${sheetTargets.has(p.id) ? ' on' : ''}" data-id="${esc(p.id)}" aria-pressed="${sheetTargets.has(p.id)}"><span class="mini">${ICONS[p.type] || ICONS.desktop}</span><span class="tn">${esc(p.name)}</span></button>`).join('') +
-        `<button type="button" class="target all" data-all="1">${all ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</button>`;
+        `<button type="button" class="target all" data-all="1">${all ? tr('sheet.none') : tr('sheet.all')}</button>`;
     }
 
     const list = $('#sheet-list');
     const total = pending.reduce((s, f) => s + f.size, 0);
-    $('#sheet-sub').textContent = pending.length ? `${describeFiles(pending)} · ${fmtBytes(total)}` : 'Chưa chọn tệp nào';
+    $('#sheet-sub').textContent = pending.length ? `${describeFiles(pending)} · ${fmtBytes(total)}` : tr('sheet.noFiles');
     $('#sheet-empty').hidden = pending.length > 0;
     $('#sheet-send').disabled = pending.length === 0 || chosen.length === 0;
-    $('#sheet-send').textContent = !pending.length ? 'Gửi' : chosen.length > 1 ? `Gửi ${pending.length} tệp tới ${chosen.length} máy` : `Gửi ${pending.length} tệp`;
+    $('#sheet-send').textContent = !pending.length ? tr('sheet.send') : chosen.length > 1 ? tr('sheet.sendNM', { n: pending.length, m: chosen.length }) : tr('sheet.sendN', { n: pending.length });
 
     list.innerHTML = '';
     pending.slice(0, 200).forEach((f, i) => {
@@ -386,7 +404,7 @@
       row.innerHTML = `
         <div class="thumb">${kind === 'video' ? ICONS.video : ICONS.file}</div>
         <div class="info"><div class="fn">${esc(f.name)}</div><div class="fs">${fmtBytes(f.size)}</div></div>
-        <button class="icon-btn" type="button" data-i="${i}" aria-label="Bỏ tệp này">${ICONS.close}</button>`;
+        <button class="icon-btn" type="button" data-i="${i}" aria-label="${tr('sheet.remove')}">${ICONS.close}</button>`;
       list.appendChild(row);
       if (kind === 'image') {
         getThumb(f).then((d) => { if (d) $('.thumb', row).innerHTML = `<img alt="" src="${d}">`; });
@@ -396,7 +414,7 @@
       const more = document.createElement('div');
       more.className = 'fs muted';
       more.style.padding = '6px';
-      more.textContent = `… và ${pending.length - 200} tệp khác`;
+      more.textContent = tr('sheet.more', { n: pending.length - 200 });
       list.appendChild(more);
     }
   }
@@ -422,7 +440,7 @@
   sheet.addEventListener('click', (e) => { if (e.target === sheet) closeSheet(); });
   $('#sheet-send').addEventListener('click', () => {
     const targets = [...sheetTargets].map((id) => peers.get(id)).filter(Boolean);
-    if (!targets.length) { toast('Hãy chọn ít nhất một thiết bị nhận.', true); return; }
+    if (!targets.length) { toast(tr('toast.pickTarget'), true); return; }
     if (!pending.length) return;
     const files = pending;
     pending = [];
@@ -485,7 +503,7 @@
     if (!t || TERMINAL.has(t.status)) return;
     t.cancelled = true;
     t.status = 'cancelled';
-    t.note = `${t.peerName} đã huỷ`;
+    t.note = { k: 'note.peerCancelled', p: { name: t.peerName } };
     cleanup(t);
     removeIncoming(t);
     upsertCard(t);
@@ -501,7 +519,7 @@
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'failed') {
           if (!t.opened) fallbackToRelay(t);
-          else if (!TERMINAL.has(t.status)) fail(t, 'Kết nối P2P bị gián đoạn');
+          else if (!TERMINAL.has(t.status)) fail(t, 'err.p2pBroken');
         }
       };
       const dc = pc.createDataChannel('mikdrop');
@@ -515,7 +533,7 @@
       };
       dc.onmessage = (e) => { if (typeof e.data === 'string') onSenderCtrl(t, JSON.parse(e.data)); };
       dc.onclose = () => {
-        if (t.opened && !TERMINAL.has(t.status) && t.status !== 'finishing') fail(t, 'Kết nối bị ngắt giữa chừng');
+        if (t.opened && !TERMINAL.has(t.status) && t.status !== 'finishing') fail(t, 'err.connLost');
       };
       t.connTimer = setTimeout(() => { if (!t.opened) fallbackToRelay(t); }, RTC_TIMEOUT);
 
@@ -539,7 +557,7 @@
     t.mode = 'relay';
     t.fast = fast;
     socket.emit('use-relay', { to: t.peerId, transferId: t.id, fast });
-    if (!fast) toast('Không kết nối trực tiếp được, chuyển sang chế độ dự phòng.');
+    if (!fast) toast(tr('toast.fallback'));
     runSend(t, relayIO(t));
   }
 
@@ -551,14 +569,14 @@
 
   async function drain(dc) {
     while (dc.bufferedAmount > HIGH_WATER) {
-      if (dc.readyState !== 'open') throw new Error('Kết nối bị ngắt');
+      if (dc.readyState !== 'open') throw new Error('err.disconnected');
       await new Promise((resolve) => {
         dc.bufferedAmountLowThreshold = LOW_WATER;
         dc.onbufferedamountlow = () => { dc.onbufferedamountlow = null; resolve(); };
         setTimeout(resolve, 500);
       });
     }
-    if (dc.readyState !== 'open') throw new Error('Kết nối bị ngắt');
+    if (dc.readyState !== 'open') throw new Error('err.disconnected');
   }
 
   function pickChunk(pc) {
@@ -593,11 +611,7 @@
         inflight--;
         inflightBytes -= bytes;
         if (err) {
-          error = new Error(
-            err === 'gone' ? 'Thiết bị đã ngắt kết nối'
-              : err === 'disabled' ? 'Không kết nối trực tiếp được và máy chủ đã tắt chế độ dự phòng'
-                : 'Đường truyền dự phòng bị lỗi'
-          );
+          error = new Error(err === 'gone' ? 'err.peerLeft' : err === 'disabled' ? 'err.relayDisabled' : 'err.relayFailed');
         }
         const w = waiters.shift();
         if (w) w();
@@ -641,7 +655,7 @@
       await io.sendCtrl({ t: 'done' });
       if (!TERMINAL.has(t.status)) { t.status = 'finishing'; upsertCard(t); }
     } catch (err) {
-      if (!t.cancelled && !TERMINAL.has(t.status)) fail(t, err.message || 'Gửi thất bại');
+      if (!t.cancelled && !TERMINAL.has(t.status)) fail(t, err.message || 'err.sendFailed');
     }
   }
 
@@ -661,7 +675,7 @@
     const metas = m.files.map((f) => ({ name: safeName(f.name), size: Math.max(0, Number(f.size) || 0), type: String(f.type || '') }));
     const peer = peers.get(m.from);
     const t = {
-      id: m.transferId, dir: 'recv', peerId: m.from, peerName: peer ? peer.name : 'Thiết bị lạ', peerType: peer ? peer.type : 'desktop',
+      id: m.transferId, dir: 'recv', peerId: m.from, peerName: peer ? peer.name : tr('in.unknown'), peerType: peer ? peer.type : 'desktop',
       metas, thumbs: Array.isArray(m.thumbs) ? m.thumbs.slice(0, 4) : [], total: metas.reduce((s, f) => s + f.size, 0),
       done: 0, status: 'incoming', received: [], cur: null, pendingCands: [], remoteSet: false, mode: 'rtc',
     };
@@ -683,12 +697,10 @@
     incomingEl.hidden = !t;
     if (!t) return;
     $('#in-avatar').innerHTML = ICONS[t.peerType] || ICONS.desktop;
-    $('#in-title').textContent = `${t.peerName} muốn gửi ${describeFiles(t.metas)}`;
-    let sub = `${t.metas.length} tệp · ${fmtBytes(t.total)}`;
+    $('#in-title').textContent = tr('in.title', { name: t.peerName, what: describeFiles(t.metas) });
+    let sub = tr('in.sub', { n: t.metas.length, size: fmtBytes(t.total) });
     if (t.total >= STREAM_MIN) {
-      sub += CAN_STREAM
-        ? '. Bạn sẽ được chọn nơi lưu, tệp ghi thẳng ra ổ đĩa.'
-        : '. Tệp lớn được giữ trong bộ nhớ cho đến khi nhận xong; có thể lỗi nếu thiết bị thiếu RAM.';
+      sub += CAN_STREAM ? tr('in.bigStream') : tr('in.bigRam');
     }
     $('#in-sub').textContent = sub;
 
@@ -710,11 +722,11 @@
     const names = $('#in-names');
     names.innerHTML = '';
     if (!t.thumbs.length) t.metas.slice(0, 4).forEach((f) => names.insertAdjacentHTML('beforeend', `<li>${esc(f.name)} · ${fmtBytes(f.size)}</li>`));
-    if (!t.thumbs.length && t.metas.length > 4) names.insertAdjacentHTML('beforeend', `<li>… và ${t.metas.length - 4} tệp khác</li>`);
+    if (!t.thumbs.length && t.metas.length > 4) names.insertAdjacentHTML('beforeend', `<li>${tr('sheet.more', { n: t.metas.length - 4 })}</li>`);
 
     const q = $('#in-queue');
     q.hidden = incoming.length < 2;
-    q.textContent = `Còn ${incoming.length - 1} yêu cầu khác đang chờ`;
+    q.textContent = tr('in.queue', { n: incoming.length - 1 });
   }
 
   $('#in-accept').addEventListener('click', async () => {
@@ -725,7 +737,7 @@
     t.sink = await sinkPromise;
     if (TERMINAL.has(t.status)) return; // người gửi đã huỷ trong lúc chọn nơi lưu
     t.status = 'connecting';
-    t.recvTimer = setTimeout(() => { if (t.status === 'connecting') fail(t, 'Hết thời gian chờ kết nối'); }, RECV_TIMEOUT);
+    t.recvTimer = setTimeout(() => { if (t.status === 'connecting') fail(t, 'err.timeout'); }, RECV_TIMEOUT);
     socket.emit('transfer-accept', { to: t.peerId, transferId: t.id });
     upsertCard(t);
     showIncoming();
@@ -734,7 +746,7 @@
     const t = incoming.shift();
     if (!t) return;
     t.status = 'declined';
-    t.note = 'Bạn đã từ chối';
+    t.note = { k: 'note.youDeclined' };
     socket.emit('transfer-decline', { to: t.peerId, transferId: t.id });
     upsertCard(t);
     showIncoming();
@@ -799,7 +811,7 @@
         else onRecvBin(t, ev.data);
       };
       dc.onclose = () => {
-        if (!TERMINAL.has(t.status) && t.mode === 'rtc') fail(t, 'Kết nối bị ngắt giữa chừng');
+        if (!TERMINAL.has(t.status) && t.mode === 'rtc') fail(t, 'err.connLost');
       };
     };
     return pc;
@@ -834,12 +846,12 @@
   function enqueue(t, fn) {
     t.chain = (t.chain || Promise.resolve())
       .then(() => (TERMINAL.has(t.status) ? null : fn()))
-      .catch((err) => fail(t, `Không ghi được tệp ra ổ đĩa: ${(err && err.message) || err}`));
+      .catch((err) => fail(t, 'err.disk', { msg: (err && err.message) || String(err) }));
   }
 
   function finishRecv(t) {
     if (TERMINAL.has(t.status)) return;
-    if (t.received.length !== t.metas.length) return fail(t, 'Nhận không đủ số tệp');
+    if (t.received.length !== t.metas.length) return fail(t, 'err.missingFiles');
     t.done = t.total;
     t.status = 'done';
     t.finishedAt = performance.now();
@@ -865,7 +877,7 @@
     } else if (msg.t === 'end') {
       const c = t.cur;
       if (!c) return;
-      if (c.got !== c.size) return fail(t, `Tệp "${c.name}" bị thiếu dữ liệu`);
+      if (c.got !== c.size) return fail(t, 'err.fileShort', { name: c.name });
       t.cur = null;
       if (t.sink) {
         enqueue(t, async () => {
@@ -942,16 +954,17 @@
     if (TERMINAL.has(t.status)) return;
     t.cancelled = true;
     t.status = 'cancelled';
-    t.note = 'Bạn đã huỷ';
+    t.note = { k: 'note.youCancelled' };
     socket.emit('transfer-cancel', { to: t.peerId, transferId: t.id });
     cleanup(t);
     upsertCard(t);
   }
 
-  function fail(t, reason) {
+  // reason là khoá trong bảng dịch (hoặc thông báo thô của hệ thống); params dùng cho khoá có tham số
+  function fail(t, reason, params) {
     if (TERMINAL.has(t.status)) return;
     t.status = 'error';
-    t.note = reason;
+    t.note = { k: reason, p: params };
     cleanup(t);
     upsertCard(t);
   }
@@ -984,23 +997,25 @@
     tray.hidden = tray.children.length === 0;
   }
 
+  const noteText = (t) => (t.note ? tr(t.note.k, t.note.p) : '');
+
   function statusText(t) {
     const who = esc(t.peerName);
     switch (t.status) {
-      case 'waiting': return `Đang chờ ${who} chấp nhận…`;
-      case 'incoming': return 'Đang chờ bạn xác nhận';
-      case 'connecting': return t.dir === 'send' ? 'Đang kết nối trực tiếp…' : 'Đang kết nối…';
+      case 'waiting': return tr('st.waiting', { name: who });
+      case 'incoming': return tr('st.incoming');
+      case 'connecting': return t.dir === 'send' ? tr('st.connectingSend') : tr('st.connectingRecv');
       case 'sending': case 'receiving': return progressText(t);
-      case 'finishing': return 'Đang hoàn tất…';
+      case 'finishing': return tr('st.finishing');
       case 'done': {
         const secs = t.startedAt && t.finishedAt ? (t.finishedAt - t.startedAt) / 1000 : 0;
-        const speed = secs > 0.3 && t.total > 1024 * 1024 ? ` · TB ${fmtBytes(t.total / secs)}/s` : '';
-        const where = t.sink ? ' · đã lưu vào ổ đĩa' : '';
-        return `${t.dir === 'send' ? 'Đã gửi' : 'Đã nhận'} · ${fmtBytes(t.total)}${speed}${where}`;
+        const speed = secs > 0.3 && t.total > 1024 * 1024 ? tr('st.avg', { speed: fmtBytes(t.total / secs) }) : '';
+        const where = t.sink ? tr('st.savedDisk') : '';
+        return `${t.dir === 'send' ? tr('st.sent') : tr('st.received')} · ${fmtBytes(t.total)}${speed}${where}`;
       }
-      case 'declined': return t.note || `${who} đã từ chối`;
-      case 'cancelled': return t.note || 'Đã huỷ';
-      case 'error': return esc(t.note || 'Có lỗi xảy ra');
+      case 'declined': return t.note ? esc(noteText(t)) : tr('st.declined', { name: who });
+      case 'cancelled': return t.note ? esc(noteText(t)) : tr('st.cancelled');
+      case 'error': return esc(t.note ? noteText(t) : tr('err.generic'));
       default: return '';
     }
   }
@@ -1009,7 +1024,7 @@
     const pct = t.total ? Math.min(100, Math.floor((t.done / t.total) * 100)) : 0;
     const secs = (performance.now() - (t.startedAt || performance.now())) / 1000;
     const speed = secs > 0.5 ? ` · ${fmtBytes(t.done / secs)}/s` : '';
-    return `${pct}% · ${fmtBytes(t.done)} / ${fmtBytes(t.total)}${speed}${t.mode === 'relay' ? (t.fast ? ' · qua máy chủ nội bộ' : ' · dự phòng') : ''}`;
+    return `${pct}% · ${fmtBytes(t.done)} / ${fmtBytes(t.total)}${speed}${t.mode === 'relay' ? (t.fast ? tr('st.viaHost') : tr('st.fallback')) : ''}`;
   }
 
   function cardHTML(t) {
@@ -1017,7 +1032,7 @@
     const bad = t.status === 'error' || t.status === 'declined' || t.status === 'cancelled';
     const active = !TERMINAL.has(t.status);
     const icon = ok ? ICONS.check : bad ? ICONS.warn : t.dir === 'send' ? ICONS.up : ICONS.down;
-    const title = t.dir === 'send' ? `Gửi ${describeFiles(t.metas)} tới ${esc(t.peerName)}` : `Nhận ${describeFiles(t.metas)} từ ${esc(t.peerName)}`;
+    const title = tr(t.dir === 'send' ? 'card.send' : 'card.recv', { what: describeFiles(t.metas), name: esc(t.peerName) });
     const indeterminate = ['waiting', 'incoming', 'connecting', 'finishing'].includes(t.status);
 
     let extra = '';
@@ -1028,12 +1043,12 @@
           : `<span class="ph">${kindOf(r) === 'video' ? ICONS.video : ICONS.file}</span>`;
         // Tệp đã ghi thẳng ra ổ đĩa không còn trong bộ nhớ nên không có nút "lưu lại"
         return r.url
-          ? `<button class="chip" type="button" data-act="save" data-i="${i}" title="Lưu lại">${media}<span>${esc(r.name)}</span></button>`
-          : `<span class="chip" title="Đã lưu vào ổ đĩa">${media}<span>${esc(r.name)}</span></span>`;
+          ? `<button class="chip" type="button" data-act="save" data-i="${i}" title="${tr('card.saveAgain')}">${media}<span>${esc(r.name)}</span></button>`
+          : `<span class="chip" title="${tr('card.onDisk')}">${media}<span>${esc(r.name)}</span></span>`;
       }).join('');
       const more = t.received.length > 6 ? `<span class="chip" style="padding:4px 10px">+${t.received.length - 6}</span>` : '';
       extra = `<div class="got">${chips}${more}</div>`;
-      const label = IS_IOS && CAN_SHARE_FILES ? 'Lưu vào Ảnh / Tệp' : 'Lưu lại tất cả';
+      const label = IS_IOS && CAN_SHARE_FILES ? tr('card.saveIos') : tr('card.saveAll');
       if (!t.sink && (!AUTO_SAVE || t.received.length > 1)) extra +=`<button class="btn small ${AUTO_SAVE ? '' : 'primary'}" type="button" data-act="saveall">${label}</button>`;
     }
 
@@ -1044,7 +1059,7 @@
           <div class="card-title">${title}</div>
           <div class="card-meta" data-role="meta">${statusText(t)}</div>
         </div>
-        <button class="icon-btn" type="button" data-act="${active ? 'cancel' : 'dismiss'}" aria-label="${active ? 'Huỷ' : 'Đóng'}">${ICONS.close}</button>
+        <button class="icon-btn" type="button" data-act="${active ? 'cancel' : 'dismiss'}" aria-label="${active ? tr('card.cancel') : tr('card.close')}">${ICONS.close}</button>
       </div>
       ${t.status === 'incoming' || TERMINAL.has(t.status) && !ok ? '' : `<div class="bar ${indeterminate ? 'indeterminate' : ''}" data-role="bar"><i style="width:${t.total ? Math.min(100, (t.done / t.total) * 100) : ok ? 100 : 0}%"></i></div>`}
       ${extra}`;
@@ -1077,7 +1092,7 @@
     const busy = [...transfers.values()].some((t) => BUSY_STATES.includes(t.status));
     if (busy && !warnedAwake && IS_MOBILE && !('wakeLock' in navigator)) {
       warnedAwake = true;
-      toast('Giữ màn hình sáng và đừng chuyển sang app khác cho đến khi truyền xong.');
+      toast(tr('toast.stayAwake'));
     }
     if (busy && !wakeLock && 'wakeLock' in navigator && !document.hidden) {
       try {
@@ -1128,11 +1143,11 @@
     clearInterval(flashTimer);
     flashTimer = setInterval(() => {
       on = !on;
-      document.title = on ? `● ${t.peerName} muốn gửi tệp` : baseTitle;
+      document.title = on ? tr('in.notify', { name: t.peerName }) : baseTitle;
     }, 900);
     try {
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('MikDrop', { body: `${t.peerName} muốn gửi ${describeFiles(t.metas)}` });
+        new Notification('MikDrop', { body: tr('in.title', { name: t.peerName, what: describeFiles(t.metas) }) });
       }
     } catch (e) { /* bỏ qua */ }
   }
@@ -1149,33 +1164,97 @@
     setTimeout(() => el.remove(), 4000);
   }
 
-  // ------------------------------------------------------------------ Đổi tên
-  const renameEl = $('#rename');
-  const renameInput = $('#rename-input');
-  $('#whoami').addEventListener('click', () => {
-    renameInput.value = myName;
-    renameEl.hidden = false;
-    setTimeout(() => { renameInput.focus(); renameInput.select(); }, 50);
+  // ------------------------------------------------------------------ Cài đặt: tên hiển thị + ngôn ngữ
+  const settingsEl = $('#settings');
+  const nameInput = $('#name-input');
+  const langSeg = $('#lang-seg');
+
+  function setName(name) {
+    myName = name;
+    store.set('mikdrop.name', name);
+    $('#my-name').textContent = name;
+    socket.emit('rename', name);
+  }
+
+  // Lưu tên người dùng nhập: để trống hoặc trùng tên máy thì quay về chế độ tự động
+  function saveName(raw) {
+    const v = raw.trim().slice(0, 40);
+    if (!v) nameMode = 'auto';
+    else if (machineName() && v === machineName()) nameMode = 'auto';
+    else if (v !== myName) nameMode = 'custom';
+    store.set('mikdrop.nameMode', nameMode);
+    setName(v || autoName());
+  }
+
+  function setMachineName(kind, value) {
+    const v = String(value || '').trim().slice(0, 40);
+    if (!v) return;
+    if (kind === 'server') serverName = v; else modelName = v;
+    if (nameMode === 'auto' && autoName() !== myName) setName(autoName());
+    renderSettings();
+  }
+
+  function renderSettings() {
+    langSeg.innerHTML = I18N.LANGS
+      .map((l) => `<button type="button" class="target${l.code === I18N.lang ? ' on' : ''}" data-lang="${l.code}" aria-pressed="${l.code === I18N.lang}">${esc(l.label)}</button>`)
+      .join('');
+    const m = machineName();
+    const useBtn = $('#use-machine');
+    useBtn.hidden = !m || nameInput.value.trim() === m;
+    if (m) useBtn.textContent = tr('set.useMachine', { name: m });
+    $('#name-hint').textContent = nameMode === 'auto' ? (m ? tr('set.hintMachine') : tr('set.hintNoMachine')) : tr('set.hintCustom');
+  }
+
+  function openSettings() {
+    nameInput.value = myName;
+    renderSettings();
+    settingsEl.hidden = false;
+    setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
+  }
+  $('#whoami').addEventListener('click', openSettings);
+  $('#settingsbtn').addEventListener('click', openSettings);
+  settingsEl.addEventListener('click', (e) => { if (e.target === settingsEl) settingsEl.hidden = true; });
+  nameInput.addEventListener('input', renderSettings);
+  langSeg.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-lang]');
+    if (b) I18N.setLang(b.dataset.lang); // áp dụng ngay, refreshAll() chạy qua I18N.onChange
   });
-  $('#rename-cancel').addEventListener('click', () => { renameEl.hidden = true; });
-  renameEl.addEventListener('click', (e) => { if (e.target === renameEl) renameEl.hidden = true; });
-  $('#rename-form').addEventListener('submit', (e) => {
+  $('#use-machine').addEventListener('click', () => { nameInput.value = machineName() || ''; renderSettings(); });
+  $('#settings-form').addEventListener('submit', (e) => {
     e.preventDefault();
-    const name = renameInput.value.trim().slice(0, 40);
-    if (name) {
-      myName = name;
-      store.set('mikdrop.name', name);
-      $('#my-name').textContent = name;
-      socket.emit('rename', name);
-    }
-    renameEl.hidden = true;
+    saveName(nameInput.value);
+    settingsEl.hidden = true;
   });
+
+  // Tên máy: server biết hostname của máy chạy MikDrop (và tên mà router đặt cho các máy khác trong LAN);
+  // Android Chrome (HTTPS/localhost) cho biết model máy.
+  fetch('/api/whoami').then((r) => r.json()).then((i) => setMachineName('server', i && i.machineName)).catch(() => {});
+  try {
+    if (navigator.userAgentData && /Android/i.test(navigator.userAgent)) {
+      navigator.userAgentData.getHighEntropyValues(['model']).then((v) => setMachineName('model', v && v.model)).catch(() => {});
+    }
+  } catch (e) { /* bỏ qua */ }
+
+  // Đổi ngôn ngữ: vẽ lại mọi chuỗi đang hiển thị
+  function refreshAll() {
+    if (nameMode === 'auto' && !machineName() && myName !== generatedName()) setName(generatedName());
+    setStatus(statusKind);
+    renderRoomLabel();
+    renderBanner();
+    renderSheet();
+    showIncoming();
+    for (const t of transfers.values()) upsertCard(t);
+    if (!inviteEl.hidden) renderInvite();
+    $('#speed-run').textContent = speedBusy ? tr('sp.running') : tr('sp.rerun');
+    if (!settingsEl.hidden) renderSettings();
+  }
+  I18N.onChange(refreshAll);
 
   // ------------------------------------------------------------------ Đo tốc độ mạng
   const speedEl = $('#speed');
   let speedBusy = false;
   const mbps = (bytes, ms) => bytes / 1048576 / (ms / 1000);
-  const fmtSpeed = (v) => `${v >= 10 ? Math.round(v) : v.toFixed(1).replace('.', ',')} MB/s`;
+  const fmtSpeed = (v) => `${v >= 10 ? Math.round(v) : v.toFixed(1).replace('.', I18N.lang === 'vi' ? ',' : '.')} MB/s`;
 
   async function timedDown(mb) {
     const t0 = performance.now();
@@ -1194,7 +1273,7 @@
     speedBusy = true;
     const run = $('#speed-run');
     run.disabled = true;
-    run.textContent = 'Đang đo…';
+    run.textContent = tr('sp.running');
     for (const id of ['#sp-ping', '#sp-down', '#sp-up']) $(id).textContent = '…';
     $('#sp-note').textContent = '';
     try {
@@ -1220,22 +1299,22 @@
       const local = /^(localhost|127\.)/.test(location.hostname);
       let note;
       if (local) {
-        note = 'Bạn đang đo ngay trên máy chạy MikDrop nên số này không phản ánh Wi-Fi. <strong>Mở MikDrop trên iPhone rồi đo ở đó</strong> để biết tốc độ thật.';
+        note = tr('sp.local');
       } else if (worst < 3) {
-        note = `<strong>Wi-Fi đang rất chậm</strong> (khoảng ${fmtSpeed(worst)}), nên gửi tệp không thể nhanh hơn. Thử: lại gần router, dùng băng tần 5 GHz, tránh dùng hotspot điện thoại, tắt Chế độ nguồn điện thấp trên iPhone, tắt VPN.`;
+        note = tr('sp.slow', { v: fmtSpeed(worst) });
       } else if (worst < 15) {
-        note = `Mạng ở mức trung bình (${fmtSpeed(worst)}). Tốc độ gửi tệp sẽ không vượt con số này. Băng tần 5 GHz và đứng gần router sẽ nhanh hơn.`;
+        note = tr('sp.mid', { v: fmtSpeed(worst) });
       } else {
-        note = `<strong>Mạng tốt.</strong> Tốc độ gửi tệp có thể đạt gần ${fmtSpeed(worst)}.`;
+        note = tr('sp.good', { v: fmtSpeed(worst) });
       }
-      if (!local && ping > 80) note += ' Độ trễ cao: iPhone có thể đang tiết kiệm điện Wi-Fi, hãy giữ màn hình sáng khi gửi.';
+      if (!local && ping > 80) note += tr('sp.highPing');
       $('#sp-note').innerHTML = note;
     } catch (err) {
-      $('#sp-note').textContent = 'Không đo được. Kiểm tra kết nối tới máy chạy MikDrop rồi thử lại.';
+      $('#sp-note').textContent = tr('sp.fail');
     } finally {
       speedBusy = false;
       run.disabled = false;
-      run.textContent = 'Đo lại';
+      run.textContent = tr('sp.rerun');
     }
   }
   $('#speedbtn').addEventListener('click', () => { speedEl.hidden = false; runSpeedTest(); });
@@ -1264,7 +1343,7 @@
     const box = $('#qr-box');
     const url = inviteUrls[inviteIdx];
     box.hidden = !url;
-    $('#invite-url').textContent = url || 'Chưa thấy địa chỉ mạng. Hãy kết nối Wi-Fi hoặc bật Mobile Hotspot rồi thử lại.';
+    $('#invite-url').textContent = url || tr('inv.noUrl');
     if (url) $('#qr-img').src = `/api/qr.svg?u=${encodeURIComponent(url)}`;
     const list = $('#invite-urls');
     list.hidden = inviteUrls.length < 2;
@@ -1293,9 +1372,9 @@
     fetch('/api/info').then((r) => r.json()).then((info) => { if (info.canQuit) $('#quitbtn').hidden = false; }).catch(() => {});
   }
   $('#quitbtn').addEventListener('click', async () => {
-    if (!window.confirm('Thoát MikDrop? Các thiết bị khác sẽ không gửi được tệp nữa.')) return;
+    if (!window.confirm(tr('quit.confirm'))) return;
     try { await fetch('/api/quit', { method: 'POST', headers: { 'X-MikDrop': '1' } }); } catch (e) { /* server đã tắt */ }
-    document.body.innerHTML = '<p style="padding:32px;font:16px sans-serif;color:#fff4ec">MikDrop đã tắt. Bạn có thể đóng tab này.</p>';
+    document.body.innerHTML = '<p style="padding:32px;font:16px sans-serif;color:#fff4ec">' + tr('quit.bye') + '</p>';
   });
 
   // Lần đầu mở trên chính máy chạy server (ví dụ vừa bấm đúp MikDrop.exe): tự hiện mã QR một lần
@@ -1328,20 +1407,20 @@
     e.preventDefault();
     const code = roomInput.value.trim().toLowerCase();
     if (code && !/^[a-z0-9][a-z0-9-]{2,23}$/.test(code)) {
-      toast('Mã phòng gồm 3-24 ký tự: chữ không dấu, số và dấu gạch ngang.', true);
+      toast(tr('toast.roomFormat'), true);
       return;
     }
     joinRoom(code);
     roomEl.hidden = true;
   });
   $('#room-invite').addEventListener('click', async () => {
-    if (!myRoom) { toast('Hãy nhập hoặc tạo mã phòng trước.'); return; }
+    if (!myRoom) { toast(tr('toast.needRoom')); return; }
     const link = `${location.origin}/?room=${encodeURIComponent(myRoom)}`;
     try {
-      if (navigator.share) await navigator.share({ title: 'MikDrop', text: 'Vào phòng MikDrop của tôi', url: link });
-      else { await navigator.clipboard.writeText(link); toast('Đã sao chép liên kết mời.'); }
+      if (navigator.share) await navigator.share({ title: 'MikDrop', text: tr('inv.shareText'), url: link });
+      else { await navigator.clipboard.writeText(link); toast(tr('toast.copied')); }
     } catch (err) {
-      if (!err || err.name !== 'AbortError') window.prompt('Sao chép liên kết này:', link);
+      if (!err || err.name !== 'AbortError') window.prompt(tr('inv.copyPrompt'), link);
     }
   });
 
@@ -1350,7 +1429,7 @@
     if (!speedEl.hidden && !speedBusy) speedEl.hidden = true;
     else if (!inviteEl.hidden) inviteEl.hidden = true;
     else if (!roomEl.hidden) roomEl.hidden = true;
-    else if (!renameEl.hidden) renameEl.hidden = true;
+    else if (!settingsEl.hidden) settingsEl.hidden = true;
     else if (!sheet.hidden) closeSheet();
   });
 
@@ -1360,5 +1439,7 @@
   });
 
   setStatus('connecting');
+  renderRoomLabel();
+  $('#speed-run').textContent = tr('sp.rerun');
   renderPeers();
 })();
