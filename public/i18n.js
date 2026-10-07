@@ -17,7 +17,7 @@
       'status.connecting': 'Đang kết nối…',
       'status.ready': 'Sẵn sàng',
       'status.nearby': ({ n }) => `${n} thiết bị gần đây`,
-      'status.off': 'Mất kết nối, đang thử lại…',
+      'status.off': 'Mất kết nối…',
       'lib.fail': 'Không tải được thư viện kết nối (Socket.io). Hãy tải lại trang (Ctrl+F5) hoặc kiểm tra server MikDrop còn đang chạy.',
 
       // --- giao diện tĩnh
@@ -173,6 +173,7 @@
       'set.hintMachine': 'Đang dùng tên máy. Các thiết bị khác sẽ thấy bạn bằng tên này.',
       'set.hintCustom': 'Tên này hiện cho các thiết bị khác thấy bạn.',
       'set.hintNoMachine': 'Trình duyệt không cho biết tên thiết bị này nên MikDrop đặt tên tạm. Bạn có thể tự đặt tên khác.',
+      'set.tools': 'Công cụ',
       'set.done': 'Xong',
 
       // --- thoát
@@ -188,7 +189,7 @@
       'status.connecting': 'Connecting…',
       'status.ready': 'Ready',
       'status.nearby': ({ n }) => plural(n, 'device nearby', 'devices nearby'),
-      'status.off': 'Disconnected, retrying…',
+      'status.off': 'Reconnecting…',
       'lib.fail': 'Could not load the connection library (Socket.io). Reload the page (Ctrl+F5) or check that the MikDrop server is still running.',
 
       'top.invite': 'Show a QR code to open on another device',
@@ -333,6 +334,7 @@
       'set.hintMachine': 'Using the computer name. Other devices will see you by this name.',
       'set.hintCustom': 'Other devices see you by this name.',
       'set.hintNoMachine': 'The browser does not reveal this device\'s name, so MikDrop picked a temporary one. You can set your own.',
+      'set.tools': 'Tools',
       'set.done': 'Done',
 
       'quit.confirm': 'Quit MikDrop? Other devices will no longer be able to send files.',

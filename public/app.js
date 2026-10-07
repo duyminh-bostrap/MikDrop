@@ -244,6 +244,7 @@
       peersEl.appendChild(el);
     }
     $('#empty').hidden = peers.size > 0;
+    $('#invitebtn').hidden = peers.size === 0;
     if (typeof sheet !== 'undefined' && !sheet.hidden) renderSheet();
   }
 
@@ -1213,7 +1214,12 @@
   }
   $('#whoami').addEventListener('click', openSettings);
   $('#settingsbtn').addEventListener('click', openSettings);
-  settingsEl.addEventListener('click', (e) => { if (e.target === settingsEl) settingsEl.hidden = true; });
+  function closeSettings() {
+    if (settingsEl.hidden) return;
+    saveName(nameInput.value);
+    settingsEl.hidden = true;
+  }
+  settingsEl.addEventListener('click', (e) => { if (e.target === settingsEl) closeSettings(); });
   nameInput.addEventListener('input', renderSettings);
   langSeg.addEventListener('click', (e) => {
     const b = e.target.closest('[data-lang]');
@@ -1222,8 +1228,7 @@
   $('#use-machine').addEventListener('click', () => { nameInput.value = machineName() || ''; renderSettings(); });
   $('#settings-form').addEventListener('submit', (e) => {
     e.preventDefault();
-    saveName(nameInput.value);
-    settingsEl.hidden = true;
+    closeSettings();
   });
 
   // Tên máy: server biết hostname của máy chạy MikDrop (và tên mà router đặt cho các máy khác trong LAN);
@@ -1317,7 +1322,7 @@
       run.textContent = tr('sp.rerun');
     }
   }
-  $('#speedbtn').addEventListener('click', () => { speedEl.hidden = false; runSpeedTest(); });
+  $('#speedbtn').addEventListener('click', () => { closeSettings(); speedEl.hidden = false; runSpeedTest(); });
   $('#speed-run').addEventListener('click', runSpeedTest);
   $('#speed-close').addEventListener('click', () => { speedEl.hidden = true; });
   speedEl.addEventListener('click', (e) => { if (e.target === speedEl && !speedBusy) speedEl.hidden = true; });
@@ -1429,7 +1434,7 @@
     if (!speedEl.hidden && !speedBusy) speedEl.hidden = true;
     else if (!inviteEl.hidden) inviteEl.hidden = true;
     else if (!roomEl.hidden) roomEl.hidden = true;
-    else if (!settingsEl.hidden) settingsEl.hidden = true;
+    else if (!settingsEl.hidden) closeSettings();
     else if (!sheet.hidden) closeSheet();
   });
 

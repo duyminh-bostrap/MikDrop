@@ -22,13 +22,13 @@
         <span class="brand-name">MikDrop</span>
       </div>
       <div class="top-right">
-        <button class="qrbtn" id="settingsbtn" type="button" data-i18n-attr="aria-label:top.settings;title:top.settings" aria-label="Cài đặt" title="Cài đặt">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 7.4l2.1 1.2M17.4 15.4l2.1 1.2M4.5 16.6l2.1-1.2M17.4 8.6l2.1-1.2"/></svg>
-        </button>
-        <button class="qrbtn" id="invitebtn" type="button" data-i18n-attr="aria-label:top.invite;title:top.inviteTitle" aria-label="Hiện mã QR để mở trên thiết bị khác" title="Mời thiết bị bằng mã QR">
+        <div class="status" id="status"><i></i><span data-i18n="status.connecting">Đang kết nối…</span></div>
+        <button class="qrbtn" id="invitebtn" type="button" hidden data-i18n-attr="aria-label:top.invite;title:top.inviteTitle" aria-label="Hiện mã QR để mở trên thiết bị khác" title="Mời thiết bị bằng mã QR">
           <svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2v2h-2zM18.5 14.5h2M14.5 18.5h2M18.5 18.5h2v2"/></svg>
         </button>
-        <div class="status" id="status"><i></i><span data-i18n="status.connecting">Đang kết nối…</span></div>
+        <button class="qrbtn" id="settingsbtn" type="button" data-i18n-attr="aria-label:top.settings;title:top.settings" aria-label="Cài đặt" title="Cài đặt">
+          <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
       </div>
     </header>
 
@@ -54,8 +54,6 @@
         <span data-i18n="foot.youAre">Bạn hiển thị là</span> <b id="my-name"></b>
         <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z"/></svg>
       </button>
-      <button class="whoami" id="quitbtn" type="button" data-i18n="foot.quit" hidden>Thoát MikDrop</button>
-      <button class="whoami" id="speedbtn" type="button" data-i18n="foot.speed">Đo tốc độ mạng</button>
       <button class="whoami" id="roombtn" type="button" data-i18n-attr="title:foot.roomTitle" title="Kết nối thiết bị ở mạng khác bằng mã phòng">
         <span id="room-label">Cùng mạng Wi-Fi</span>
         <svg viewBox="0 0 24 24"><path d="M9.5 14.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14.5 9.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
@@ -122,6 +120,11 @@
       <input id="name-input" maxlength="40" data-i18n-attr="placeholder:set.namePh" placeholder="Ví dụ: iPhone của An" enterkeyhint="done">
       <button class="link" id="use-machine" type="button" hidden></button>
       <p class="muted hint" id="name-hint"></p>
+      <label class="field-label" data-i18n="set.tools">Công cụ</label>
+      <div class="tool-list">
+        <button class="btn small" id="speedbtn" type="button" data-i18n="foot.speed">Đo tốc độ mạng</button>
+        <button class="btn small danger" id="quitbtn" type="button" data-i18n="foot.quit" hidden>Thoát MikDrop</button>
+      </div>
       <div class="actions">
         <button class="btn primary" type="submit" data-i18n="set.done">Xong</button>
       </div>
