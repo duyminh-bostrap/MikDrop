@@ -2,8 +2,14 @@ name: Build binaries
 
 # Tạo file chạy độc lập (không cần cài Node.js) cho Windows và Linux.
 # Chạy tay (Actions → Build binaries → Run workflow) hoặc khi đẩy tag dạng v1.2.3.
+# Nếu có tag (đẩy tag, hoặc nhập ô "tag" khi chạy tay) thì đăng luôn các file lên GitHub Release.
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag release để đăng file lên, ví dụ v1.4.0 (bỏ trống = chỉ build, không đăng)'
+        required: false
+        type: string
   push:
     tags: ['v*']
 
@@ -37,3 +43,28 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.path }}
           if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name == 'push' || inputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Create or update release
+        run: |
+          cd assets
+          sha256sum * > SHA256SUMS.txt
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" * --clobber
+          else
+            gh release create "$TAG" * --title "MikDrop ${TAG#v}" --generate-notes --target "$GITHUB_SHA"
+          fi

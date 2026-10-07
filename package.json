@@ -1,6 +1,6 @@
 {
   "name": "mikdrop",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "MikDrop - chia sẻ ảnh/tệp ngang hàng (P2P) qua Wi-Fi cục bộ bằng trình duyệt (Windows, macOS, Linux)",
   "main": "server.js",
   "scripts": {
