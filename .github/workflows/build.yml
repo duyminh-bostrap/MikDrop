@@ -1,0 +1,39 @@
+name: Build binaries
+
+# Tạo file chạy độc lập (không cần cài Node.js) cho Windows và Linux.
+# Chạy tay (Actions → Build binaries → Run workflow) hoặc khi đẩy tag dạng v1.2.3.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            script: build:exe
+            artifact: MikDrop-windows-x64
+            path: dist/MikDrop.exe
+          - os: ubuntu-latest
+            script: build:linux
+            artifact: mikdrop-linux-x64
+            path: dist/mikdrop-linux-x64
+          - os: ubuntu-24.04-arm
+            script: build:linux
+            artifact: mikdrop-linux-arm64
+            path: dist/mikdrop-linux-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run ${{ matrix.script }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
+          if-no-files-found: error

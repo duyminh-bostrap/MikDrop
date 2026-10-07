@@ -1,0 +1,38 @@
+# Chạy MikDrop như dịch vụ systemd (tự khởi động cùng máy, tự chạy lại khi lỗi).
+#
+#   Cài đặt (dùng file chạy độc lập mikdrop-linux-x64, hoặc đổi ExecStart sang "node server.js"):
+#     sudo useradd --system --home /opt/mikdrop --shell /usr/sbin/nologin mikdrop
+#     sudo install -d -o mikdrop /opt/mikdrop
+#     sudo install -m 755 -o mikdrop dist/mikdrop-linux-x64 /opt/mikdrop/mikdrop
+#     sudo cp deploy/mikdrop.service /etc/systemd/system/
+#     sudo systemctl daemon-reload && sudo systemctl enable --now mikdrop
+#     journalctl -u mikdrop -f        # xem nhật ký
+#
+#   Chạy online đứng sau Caddy/nginx: bỏ dấu # ở dòng TRUST_PROXY và để MikDrop chỉ nghe nội bộ qua proxy.
+[Unit]
+Description=MikDrop - chia sẻ tệp ngang hàng qua trình duyệt
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=mikdrop
+WorkingDirectory=/opt/mikdrop
+ExecStart=/opt/mikdrop/mikdrop --keep-alive --no-open
+Environment=PORT=3000
+#Environment=TRUST_PROXY=1
+#Environment=RELAY=0
+Restart=on-failure
+RestartSec=3
+
+# Cho phép nghe cổng 80/443 mà không cần root (nếu đặt PORT=80)
+#AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Hạn chế quyền
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/mikdrop
+
+[Install]
+WantedBy=multi-user.target

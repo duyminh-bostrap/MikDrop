@@ -1,0 +1,5 @@
+# Caddy tự xin và gia hạn chứng chỉ HTTPS cho $DOMAIN, WebSocket (Socket.io) được proxy sẵn.
+# Caddy ghi đè X-Forwarded-For bằng IP thật của thiết bị nên MikDrop (PROXY_HOPS=1) lấy đúng IP.
+{$DOMAIN} {
+	reverse_proxy mikdrop:3000
+}

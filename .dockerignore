@@ -1,0 +1,10 @@
+node_modules
+dist
+.cert
+.git
+.github
+.env
+*.log
+deploy
+scripts
+README.md

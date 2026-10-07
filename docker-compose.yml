@@ -1,0 +1,39 @@
+# Triển khai MikDrop online trên VPS Linux, có HTTPS tự động (Let's Encrypt qua Caddy).
+#
+#   1. Trỏ tên miền (bản ghi A/AAAA) về IP của VPS, mở cổng 80 và 443.
+#   2. DOMAIN=mikdrop.example.com docker compose up -d --build
+#      (hoặc đặt DOMAIN=... trong file .env cạnh file này)
+#   3. Mở https://mikdrop.example.com trên các thiết bị.
+#
+# Chỉ Caddy mở cổng ra ngoài; MikDrop chỉ nhận kết nối từ Caddy trong mạng nội bộ của Docker.
+services:
+  mikdrop:
+    build: .
+    restart: unless-stopped
+    environment:
+      TRUST_PROXY: "1"        # đứng sau Caddy: lấy IP thiết bị từ X-Forwarded-For, tắt mDNS/QR
+      # RELAY: "0"            # tắt chế độ dự phòng qua server, tiết kiệm băng thông
+      # MAX_PEERS_PER_ROOM: "50"
+      # ICE_SERVERS: '[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}]'
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - mikdrop
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Hãy đặt DOMAIN, ví dụ DOMAIN=mikdrop.example.com docker compose up -d}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

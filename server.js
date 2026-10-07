@@ -51,7 +51,9 @@ if (HEADLESS) {
 }
 
 // Tự thoát khi không còn trang web nào mở (mặc định chỉ với bản exe; --keep-alive để tắt tính năng này)
-const AUTO_EXIT = !!sea && !args.includes('--keep-alive');
+// Trên Linux, chỉ tự thoát khi có môi trường desktop (chạy làm dịch vụ/trên máy chủ không có DISPLAY thì chạy mãi)
+const HAS_DESKTOP = process.platform !== 'linux' || !!(process.env.DISPLAY || process.env.WAYLAND_DISPLAY);
+const AUTO_EXIT = !!sea && HAS_DESKTOP && !args.includes('--keep-alive');
 const AUTO_EXIT_GRACE_MS = 15000;       // chờ khi tải lại trang hoặc mạng chập chờn
 const AUTO_EXIT_FIRST_MS = 120000;      // chờ trình duyệt mở lần đầu
 
@@ -85,7 +87,7 @@ try {
 // ---------------------------------------------------------------------------
 // Địa chỉ mạng LAN
 // ---------------------------------------------------------------------------
-const VIRTUAL_NIC = /vethernet|virtual|vmware|vbox|hyper-v|wsl|docker|tailscale|zerotier|loopback|bluetooth/i;
+const VIRTUAL_NIC = /vethernet|virtual|vmware|vbox|hyper-v|wsl|docker|tailscale|zerotier|loopback|bluetooth|^(veth|br-|virbr|lxcbr|lxdbr|cni|flannel|cali|podman|tun|tap|wg|zt)/i;
 
 function ipToInt(ip) {
   return ip.split('.').reduce((n, o) => (n << 8) + Number(o), 0) >>> 0;
@@ -420,6 +422,12 @@ function fatal(message) {
   }
 }
 
+function openBrowser(url) {
+  const cp = require('child_process');
+  if (process.platform === 'win32') cp.exec(`start "" "${url}"`, { windowsHide: true }, () => {});
+  else cp.execFile(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], () => {}); // thiếu xdg-open thì bỏ qua, URL vẫn được in ở trên
+}
+
 function printBanner() {
   if (CLOUD) {
     console.log(`MikDrop đang lắng nghe ở cổng ${PORT} (chế độ đám mây, relay ${RELAY_ENABLED ? 'bật' : 'tắt'}).`);
@@ -446,7 +454,7 @@ function printBanner() {
       console.log('\n  Quét mã QR bằng iPhone để mở nhanh:\n');
       require('qrcode-terminal').generate(url, { small: true }, (qr) => {
         console.log(qr.replace(/^/gm, '    '));
-        if (sea) console.log('\n  Giữ cửa sổ này mở trong lúc dùng MikDrop. Đóng cửa sổ để tắt.'); // bản exe chạy ở chế độ --keep-alive hoặc không phải Windows
+        if (sea) console.log(AUTO_EXIT ? '\n  MikDrop tự thoát khi đóng hết trang web. Nhấn Ctrl+C để tắt ngay.' : '\n  Giữ cửa sổ này mở trong lúc dùng MikDrop. Nhấn Ctrl+C (hoặc đóng cửa sổ) để tắt.');
       });
     } catch (err) {
       /* QR là tính năng phụ, bỏ qua nếu lỗi */
@@ -455,10 +463,8 @@ function printBanner() {
     console.log('\n  Không tìm thấy địa chỉ mạng LAN. Hãy kiểm tra kết nối Wi-Fi hoặc bật Mobile Hotspot.\n');
   }
 
-  // Bản exe: tự mở giao diện trên máy này
-  if (sea && process.platform === 'win32' && !args.includes('--no-open')) {
-    require('child_process').exec(`start "" "${scheme}://localhost${portPart}"`, { windowsHide: true }, () => {});
-  }
+  // Bản chạy độc lập (exe/Linux): tự mở giao diện trên máy này (Linux cần có desktop và lệnh xdg-open)
+  if (sea && HAS_DESKTOP && !args.includes('--no-open')) openBrowser(`${scheme}://localhost${portPart}`);
 }
 
 // Bản exe: thoát khi không còn trang web nào kết nối (đã đóng trình duyệt), để không chạy ngầm vô ích

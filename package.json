@@ -1,12 +1,13 @@
 {
   "name": "mikdrop",
   "version": "1.3.0",
-  "description": "MikDrop - chia sẻ ảnh/tệp ngang hàng (P2P) qua Wi-Fi cục bộ bằng trình duyệt",
+  "description": "MikDrop - chia sẻ ảnh/tệp ngang hàng (P2P) qua Wi-Fi cục bộ bằng trình duyệt (Windows, macOS, Linux)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "start:https": "node server.js --https",
-    "build:exe": "node scripts/build-exe.js"
+    "build:exe": "node scripts/build-exe.js",
+    "build:linux": "node scripts/build-exe.js"
   },
   "engines": {
     "node": ">=18"

@@ -1,6 +1,6 @@
 # MikDrop
 
-Chia sẻ ảnh và tệp ngang hàng (P2P) giữa iPhone, MacBook và Windows qua Wi-Fi cục bộ, chỉ cần trình duyệt, không cần cài app. Giao diện lấy cảm hứng từ AirDrop.
+Chia sẻ ảnh và tệp ngang hàng (P2P) giữa iPhone, MacBook, Windows và Linux qua Wi-Fi cục bộ, chỉ cần trình duyệt, không cần cài app. Giao diện lấy cảm hứng từ AirDrop.
 
 - **Tự động phát hiện thiết bị** cùng mạng (radar).
 - **Truyền P2P bằng WebRTC DataChannel**: tệp đi thẳng giữa hai thiết bị, server không lưu tệp.
@@ -107,6 +107,39 @@ Muốn bản exe có cửa sổ terminal để gỡ lỗi, build bằng `set MIK
 
 Lưu ý: file exe chưa được ký số nên Windows SmartScreen có thể cảnh báo "Windows protected your PC". Bấm **More info → Run anyway**. Nếu muốn tránh hẳn, cần mua chứng chỉ ký mã (code signing).
 
+## Chạy trên Linux (trong mạng nội bộ)
+
+Có 3 cách, đều chạy được trên Ubuntu/Debian/Fedora/Arch, Raspberry Pi (arm64)...
+
+**1. Chạy thẳng bằng Node.js** (cách đơn giản nhất): cài [Node.js](https://nodejs.org) 18+ rồi `npm install && npm start` như ở trên. Thêm `npm run start:https` nếu iPhone cần nút "Lưu vào Ảnh".
+
+**2. File chạy độc lập, không cần Node.js** (giống `MikDrop.exe`). Build trên máy Linux có Node.js 20+ **bản chính thức** (tải từ nodejs.org hoặc nvm, không dùng gói `nodejs` của distro):
+
+```bash
+npm install
+npm run build:linux     # tạo dist/mikdrop-linux-x64 (hoặc -arm64 trên Pi/ARM)
+./dist/mikdrop-linux-x64
+```
+
+Không có máy Linux để build? Repo có sẵn GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)): vào tab **Actions → Build binaries → Run workflow**, tải file về ở mục Artifacts (có cả Windows x64, Linux x64 và Linux arm64). Sau khi tải nhớ `chmod +x`.
+
+Khi chạy trên máy có desktop, file này tự mở trình duyệt (bằng `xdg-open`), in mã QR trong terminal và tự thoát sau khi đóng hết trang web, như bản exe. Chạy trên máy chủ không có desktop (SSH, dịch vụ) thì nó chạy mãi đến khi nhấn Ctrl+C. Tuỳ chọn `--port`, `--no-open`, `--keep-alive`, `--https` giống bản exe.
+
+**3. Chạy như dịch vụ** (tự khởi động cùng máy, hợp với Raspberry Pi/mini PC đặt ở nhà): dùng [deploy/mikdrop.service](deploy/mikdrop.service), hướng dẫn cài đặt nằm ngay đầu file.
+
+**Docker trong LAN:** `docker build -t mikdrop . && docker run --network host mikdrop`. Bắt buộc `--network host`, vì nếu không container chỉ thấy mạng ảo của Docker nên không hiện đúng địa chỉ LAN và mDNS (`mikdrop.local`) không hoạt động.
+
+### Linux: mở tường lửa
+
+Mở cổng 3000/TCP (và 5353/UDP nếu muốn dùng `mikdrop.local`):
+
+```bash
+sudo ufw allow 3000/tcp && sudo ufw allow 5353/udp                                  # Ubuntu/Debian (ufw)
+sudo firewall-cmd --permanent --add-port=3000/tcp --add-port=5353/udp && sudo firewall-cmd --reload   # Fedora/RHEL (firewalld)
+```
+
+Cổng dưới 1024 (ví dụ 80) cần `sudo`, hoặc cấp quyền một lần: `sudo setcap 'cap_net_bind_service=+ep' ./mikdrop-linux-x64` (với `npm start` thì cấp cho file `node`). Nếu máy chạy Avahi (`avahi-daemon`), `mikdrop.local` vẫn hoạt động; nếu thấy không phân giải được thì dùng địa chỉ IP.
+
 ## Khi không có Internet
 
 - Bản chạy tại nhà (`npm start`) **không cần Internet**, chỉ cần các thiết bị cùng mạng cục bộ (router không nối Internet vẫn được). Giao diện không tải gì từ CDN.
@@ -127,6 +160,24 @@ Server chỉ làm discovery và báo hiệu nên rất nhẹ, chạy tốt trên
 4. Trên iPhone: Safari → Chia sẻ → **Thêm vào Màn hình chính** để dùng như một app.
 
 Fly.io, Railway... cũng chạy được: đặt biến môi trường `TRUST_PROXY=1`, lệnh khởi động `npm start`.
+
+### VPS Linux tự quản lý (Docker + HTTPS tự động)
+
+Nếu bạn có VPS Linux (Ubuntu, Debian...) và một tên miền, đây là cách thay cho Render, không bị "ngủ" và không giới hạn băng thông của gói miễn phí:
+
+```bash
+git clone <repo-này> && cd MikDrop
+DOMAIN=mikdrop.example.com docker compose up -d --build
+```
+
+1. Trỏ bản ghi DNS (A/AAAA) của tên miền về IP của VPS, và mở cổng **80** và **443** trên tường lửa của VPS.
+2. [docker-compose.yml](docker-compose.yml) chạy MikDrop (`TRUST_PROXY=1`) cùng [Caddy](https://caddyserver.com), Caddy tự xin và gia hạn chứng chỉ Let's Encrypt, nên iPhone có nút **Lưu vào Ảnh**.
+3. Mở `https://mikdrop.example.com`. Đặt thêm biến môi trường (`RELAY`, `ICE_SERVERS`...) trong mục `environment` của file compose.
+4. Cập nhật: `git pull && docker compose up -d --build`. Xem nhật ký: `docker compose logs -f mikdrop`.
+
+**Không dùng Docker:** chạy MikDrop bằng systemd ([deploy/mikdrop.service](deploy/mikdrop.service), bỏ dấu `#` ở dòng `TRUST_PROXY=1`) rồi đặt nginx hoặc Caddy phía trước, ví dụ [deploy/nginx.conf.example](deploy/nginx.conf.example). Proxy bắt buộc chuyển tiếp WebSocket và đặt `X-Forwarded-For` (hai file mẫu đã làm sẵn). Nếu proxy của bạn có nhiều tầng (ví dụ Cloudflare đứng trước nginx), đặt `PROXY_HOPS` hoặc `TRUSTED_IP_HEADER` cho đúng, xem bảng dưới.
+
+Chạy MikDrop **trực tiếp ra Internet** không qua proxy (không đặt `TRUST_PROXY`) là cách không nên dùng: server sẽ coi mọi thiết bị như ở trong LAN.
 
 ### Biến môi trường
 
