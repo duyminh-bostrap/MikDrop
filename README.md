@@ -63,6 +63,13 @@ Mẹo: chạy trên cổng 80 để bỏ phần `:3000`, ví dụ `PORT=80 npm s
 - **Cài đặt** (biểu tượng bánh răng ở góc trên, hoặc bấm vào dòng *Bạn hiển thị là*): chọn **Tiếng Việt / English** và **tên hiển thị**. Lần đầu, ngôn ngữ theo ngôn ngữ của trình duyệt.
 - **Tên mặc định là tên máy:** trình duyệt không tự biết tên máy nên MikDrop lấy như sau. Máy chạy MikDrop dùng hostname (ví dụ `DESKTOP-ABC123`); thiết bị khác trong LAN dùng tên mà router đặt cho máy (nếu router hỗ trợ, nhiều iPhone/Android đăng ký tên này khi xin IP); điện thoại Android mở qua HTTPS hoặc localhost dùng model máy; còn lại là tên tạm kiểu `iPhone AB`. Muốn tự đặt tên, gõ vào ô *Tên hiển thị*. Bấm **Dùng tên máy** để quay lại tên tự động. Khi chạy trên Internet (bản Render/VPS), server không gửi hostname của nó cho ai.
 
+### Chia sẻ từ nút Chia sẻ của điện thoại
+
+Muốn gửi thẳng từ nút **Chia sẻ** trong Ảnh/Tệp mà không mở trang MikDrop trước (xem hướng dẫn có sẵn địa chỉ ngay trong **Cài đặt → Chia sẻ từ app khác**):
+
+- **iPhone/iPad:** Safari không cho trang web tự thêm mình vào bảng chia sẻ, nên dùng app **Phím tắt**. Bạn tạo một phím tắt "MikDrop" gồm: *Lấy nội dung của URL* (`/api/devices`, trả về danh sách thiết bị) → *Chọn từ danh sách* → *Lặp lại với từng mục* → *Lấy nội dung của URL* (POST tệp tới `/api/share?to=<thiết bị>&name=<tên tệp>`, nội dung yêu cầu là Tệp). Server gom các tệp gửi liền nhau thành một yêu cầu, ghi tạm ra đĩa, rồi gửi tới thiết bị đã chọn như một thiết bị gửi bình thường. Người nhận vẫn phải bấm **Chấp nhận**, tệp tạm bị xoá khi xong, bị từ chối hoặc sau 2 phút không ai trả lời. Cần: cùng Wi-Fi, MikDrop chạy HTTP thường (Phím tắt không tin chứng chỉ tự ký) và đang mở trên thiết bị nhận. Thêm `&from=Tên` vào địa chỉ để đặt tên người gửi, `&room=mã` nếu dùng mã phòng; chọn `to=All devices` để gửi cho mọi thiết bị.
+- **Android:** cài MikDrop thành app (Chrome → **Cài đặt ứng dụng**), sau đó MikDrop xuất hiện trong nút Chia sẻ (Web Share Target). Chrome chỉ cho cài và chạy service worker trên **HTTPS thật** hoặc `localhost`, nên cách này dùng với bản Render/VPS có tên miền, không dùng được với địa chỉ LAN `http://192.168...` hay HTTPS tự ký.
+
 ### Windows: mở tường lửa
 
 Lần đầu chạy, Windows hỏi quyền cho Node.js. Hãy tick **Mạng riêng tư (Private)**. Nếu lỡ bấm Hủy, chạy PowerShell **với quyền Administrator**:
@@ -198,6 +205,8 @@ Chạy MikDrop **trực tiếp ra Internet** không qua proxy (không đặt `TR
 | `PROXY_HOPS` | Khi không có header trên: lấy IP ở vị trí thứ N từ bên phải của `X-Forwarded-For` (mặc định 1) |
 | `RELAY=0` | Tắt chế độ dự phòng qua server, tiết kiệm băng thông |
 | `MAX_PEERS_PER_ROOM` | Số thiết bị tối đa mỗi phòng (mặc định 50) |
+| `SHARE_UPLOAD=1` | Bật nhận tệp từ Phím tắt iPhone khi chạy trên Internet (`TRUST_PROXY=1`). Mặc định tắt trên Internet, bật trong LAN. Cần `RELAY` bật |
+| `SHARE_MAX_FILE_MB` / `SHARE_MAX_TOTAL_MB` | Giới hạn mỗi tệp (mặc định 2048) và tổng dung lượng đang chờ trên đĩa (mặc định 4096) của đường Phím tắt |
 | `ICE_SERVERS` | JSON danh sách STUN/TURN, ví dụ `[{"urls":"stun:stun.l.google.com:19302"}]`. Thêm TURN nếu cần truyền qua mạng khó |
 
 ### Lưu ý khi chạy công khai

@@ -164,12 +164,14 @@
   // Cấu hình ICE (STUN/TURN) do server cung cấp
   let iceServers = [];
   let relayEnabled = true;
+  let shareEnabled = false; // server có nhận tệp từ Phím tắt iPhone không
   let iAmHost = false; // thiết bị này có phải chính máy chạy server (mạng nội bộ) không
   fetch('/api/config')
     .then((r) => r.json())
     .then((c) => {
       if (Array.isArray(c.iceServers)) iceServers = c.iceServers;
       relayEnabled = c.relay !== false;
+      shareEnabled = c.share === true;
     })
     .catch(() => {});
 
@@ -676,7 +678,8 @@
     const metas = m.files.map((f) => ({ name: safeName(f.name), size: Math.max(0, Number(f.size) || 0), type: String(f.type || '') }));
     const peer = peers.get(m.from);
     const t = {
-      id: m.transferId, dir: 'recv', peerId: m.from, peerName: peer ? peer.name : tr('in.unknown'), peerType: peer ? peer.type : 'desktop',
+      id: m.transferId, dir: 'recv', peerId: m.from, peerName: peer ? peer.name : String(m.fromName || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40) || tr('in.unknown'),
+      peerType: peer ? peer.type : ['phone', 'tablet', 'laptop', 'desktop'].includes(m.fromType) ? m.fromType : 'desktop',
       metas, thumbs: Array.isArray(m.thumbs) ? m.thumbs.slice(0, 4) : [], total: metas.reduce((s, f) => s + f.size, 0),
       done: 0, status: 'incoming', received: [], cur: null, pendingCands: [], remoteSet: false, mode: 'rtc',
     };
@@ -1372,6 +1375,66 @@
     if (b) { inviteIdx = Number(b.dataset.i); renderInvite(); }
   });
 
+  // ------------------------------------------------------------------ Chia sẻ từ app khác
+  const shareHelpEl = $('#sharehelp');
+
+  function copyText(text) {
+    const done = () => toast(tr('toast.copiedText'));
+    const legacy = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;left:-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { /* người dùng tự chọn và sao chép */ }
+      ta.remove();
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, legacy);
+    else legacy();
+  }
+
+  async function openShareHelp() {
+    shareHelpEl.hidden = false;
+    $('#sh-ios').hidden = !shareEnabled;
+    $('#sh-ios-off').hidden = shareEnabled;
+    $('#sh-android-warn').hidden = window.isSecureContext;
+    const isLocal = /^(localhost|127\.|\[?::1\]?$)/.test(location.hostname);
+    let base = location.origin;
+    if (isLocal) {
+      try { base = ((await (await fetch('/api/info')).json()).urls || [])[0] || base; } catch (e) { /* dùng localhost */ }
+    }
+    const room = myRoom ? `room=${encodeURIComponent(myRoom)}` : '';
+    $('#sh-devices').textContent = `${base}/api/devices${room ? '?' + room : ''}`;
+    $('#sh-share').textContent = `${base}/api/share?${room ? room + '&' : ''}to=`;
+  }
+  $('#sharebtn').addEventListener('click', () => { closeSettings(); openShareHelp(); });
+  $('#sharehelp-close').addEventListener('click', () => { shareHelpEl.hidden = true; });
+  shareHelpEl.addEventListener('click', (e) => { if (e.target === shareHelpEl) shareHelpEl.hidden = true; });
+  $('#sh-devices').addEventListener('click', (e) => copyText(e.currentTarget.textContent));
+  $('#sh-share').addEventListener('click', (e) => copyText(e.currentTarget.textContent));
+
+  // Android: nút Chia sẻ của hệ điều hành gửi tệp tới /share-target; service worker cất tệp vào cache rồi chuyển về /?share=1
+  async function takeSharedFiles() {
+    if (new URLSearchParams(location.search).get('share') !== '1') return;
+    history.replaceState(null, '', location.pathname);
+    try {
+      const cache = await caches.open('mikdrop-share');
+      const files = [];
+      for (const req of await cache.keys()) {
+        const res = await cache.match(req);
+        const blob = await res.blob();
+        files.push(new File([blob], decodeURIComponent(res.headers.get('X-Name') || 'file'), {
+          type: res.headers.get('Content-Type') || blob.type,
+          lastModified: Number(res.headers.get('X-Modified')) || Date.now(),
+        }));
+        await cache.delete(req);
+      }
+      if (files.length) addFiles(files); // thanh "Đã chọn N tệp - chạm vào một thiết bị để gửi" hiện ra
+    } catch (e) { /* không có cache: bỏ qua */ }
+  }
+  takeSharedFiles();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
   // Bản exe chạy nền (không có cửa sổ để đóng): hiện nút thoát khi mở từ chính máy chạy server
   if (/^(localhost|127\.)/.test(location.hostname)) {
     fetch('/api/info').then((r) => r.json()).then((info) => { if (info.canQuit) $('#quitbtn').hidden = false; }).catch(() => {});
@@ -1434,6 +1497,7 @@
     if (!speedEl.hidden && !speedBusy) speedEl.hidden = true;
     else if (!inviteEl.hidden) inviteEl.hidden = true;
     else if (!roomEl.hidden) roomEl.hidden = true;
+    else if (!shareHelpEl.hidden) shareHelpEl.hidden = true;
     else if (!settingsEl.hidden) closeSettings();
     else if (!sheet.hidden) closeSheet();
   });

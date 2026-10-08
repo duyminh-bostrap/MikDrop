@@ -9,7 +9,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-COPY server.js ./
+COPY server.js share.js ./
 COPY public ./public
 
 USER node

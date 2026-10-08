@@ -19,6 +19,7 @@ const os = require('os');
 const path = require('path');
 const express = require('express');
 const { Server } = require('socket.io');
+const { attachShare } = require('./share');
 
 // Khi đóng gói thành MikDrop.exe (Node SEA), giao diện được nhúng trong file exe
 let sea = null;
@@ -73,6 +74,8 @@ const CLOUD = process.env.TRUST_PROXY === '1';
 const TRUSTED_IP_HEADER = (process.env.TRUSTED_IP_HEADER || (process.env.RENDER ? 'cf-connecting-ip' : '')).toLowerCase();
 const PROXY_HOPS = Number(process.env.PROXY_HOPS) || 1;
 const RELAY_ENABLED = process.env.RELAY !== '0';           // RELAY=0 tắt chế độ dự phòng (tiết kiệm băng thông)
+// Nhận tệp từ Phím tắt iPhone (nút Chia sẻ). Dùng đường relay nên cần RELAY bật; trên Internet phải bật tay bằng SHARE_UPLOAD=1
+const SHARE_ENABLED = RELAY_ENABLED && (!CLOUD || process.env.SHARE_UPLOAD === '1');
 const MAX_PEERS_PER_ROOM = Number(process.env.MAX_PEERS_PER_ROOM) || 50;
 
 const DEFAULT_ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
@@ -131,7 +134,10 @@ if (sea) {
   app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
 }
 app.get('/healthz', (req, res) => res.type('text').send('ok'));
-app.get('/api/config', (req, res) => res.json({ iceServers: ICE_SERVERS, relay: RELAY_ENABLED }));
+app.get('/api/config', (req, res) => res.json({ iceServers: ICE_SERVERS, relay: RELAY_ENABLED, share: SHARE_ENABLED }));
+// Android: Chrome gửi tệp vào đây khi chọn MikDrop trong nút Chia sẻ. Service worker (public/sw.js) chặn yêu cầu này;
+// nếu nó chưa chạy thì về trang chủ, người dùng tự chọn tệp.
+app.post('/share-target', (req, res) => { req.resume(); res.redirect(303, '/'); });
 // Mã QR dạng SVG cho giao diện web ("Mời thiết bị"). Sinh trên server nên chạy được khi không có Internet.
 app.get('/api/qr.svg', async (req, res) => {
   const text = String(req.query.u || '');
@@ -261,14 +267,14 @@ function isServerHost(socket) {
 // Mặc định phòng được suy ra từ địa chỉ IP công cộng (cùng nhà/Wi-Fi => cùng IP => cùng phòng).
 // Mọi kết nối từ mạng nội bộ (192.168.x.x...) vào server chạy tại nhà đều rơi vào phòng "lan".
 // Thiết bị ở mạng khác nhau có thể nhập chung một mã phòng.
-function clientIp(socket) {
-  let ip = socket.handshake.address || '';
+function clientIpOf(address, headers) {
+  let ip = address || '';
   if (CLOUD) {
-    const trusted = TRUSTED_IP_HEADER && socket.handshake.headers[TRUSTED_IP_HEADER];
+    const trusted = TRUSTED_IP_HEADER && headers[TRUSTED_IP_HEADER];
     if (trusted) {
       ip = String(trusted).trim();
     } else {
-      const xff = socket.handshake.headers['x-forwarded-for'];
+      const xff = headers['x-forwarded-for'];
       if (xff) {
         const parts = String(xff).split(',').map((p) => p.trim()).filter(Boolean);
         ip = parts[Math.max(0, parts.length - PROXY_HOPS)] || ip;
@@ -277,6 +283,7 @@ function clientIp(socket) {
   }
   return ip.replace(/^::ffff:/i, '').replace(/%.*$/, '');
 }
+const clientIp = (socket) => clientIpOf(socket.handshake.address, socket.handshake.headers);
 
 const isPrivateIp = (ip) =>
   /^(10\.|127\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip) || ip === '::1' || /^(f[cd]|fe80)/i.test(ip);
@@ -303,9 +310,16 @@ const normalizeRoomCode = (s) => {
   return /^[a-z0-9][a-z0-9-]{2,23}$/.test(code) ? code : '';
 };
 
+// Phòng của một yêu cầu HTTP (Phím tắt): mã phòng ?room=... hoặc suy ra từ IP như thiết bị mở trang
+const roomForRequest = (req) => {
+  const code = normalizeRoomCode(req.query.room);
+  return code ? `code:${code}` : autoRoom(clientIpOf(req.socket.remoteAddress, req.headers));
+};
+
 const roomSize = (room) => [...peers.values()].filter((p) => p.room === room).length;
 
 function attachSignaling(io) {
+  const share = attachShare({ app, io, peers, cleanName, roomForRequest, enabled: SHARE_ENABLED });
   io.on('connection', (socket) => {
     socket.on('join', (info) => {
       const prev = peers.get(socket.id);
@@ -367,6 +381,7 @@ function attachSignaling(io) {
     ];
     for (const event of FORWARD) {
       socket.on(event, (msg) => {
+        if (share.handleEvent(socket, event, msg)) return; // gửi tới "thiết bị ảo" của Phím tắt iPhone
         if (!peers.has(socket.id) || !msg || typeof msg.to !== 'string') return;
         const target = sameRoomTarget(msg);
         if (!target) {
@@ -379,6 +394,7 @@ function attachSignaling(io) {
 
     // Chế độ dự phòng: chuyển tiếp từng mảnh dữ liệu (không lưu), có xác nhận để điều tiết tốc độ
     socket.on('relay', (msg, ack) => {
+      if (share.handleRelay(socket, msg, ack)) return;
       const done = typeof ack === 'function' ? ack : () => {};
       if (!RELAY_ENABLED) return done('disabled');
       if (!peers.has(socket.id) || !msg || typeof msg.to !== 'string') return done('bad-request');
@@ -392,6 +408,7 @@ function attachSignaling(io) {
     });
 
     socket.on('disconnect', () => {
+      share.onDisconnect(socket.id);
       const peer = peers.get(socket.id);
       if (peer) {
         peers.delete(socket.id);
