@@ -38,11 +38,49 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm run ${{ matrix.script }}
+
+      # Chạy thử file vừa build trên chính runner (x64 và arm64 đều là máy thật) để chắc chắn nó khởi động được
+      - name: Smoke test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          nohup ./${{ matrix.path }} --no-open --keep-alive --port 3199 > run.log 2>&1 &
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:3199/healthz >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3199/healthz; echo
+          curl -fsS http://127.0.0.1:3199/ | grep -q "MikDrop"
+          curl -fsS http://127.0.0.1:3199/vendor/socket.io.min.js -o /dev/null
+          curl -fsS "http://127.0.0.1:3199/api/qr.svg?u=http%3A%2F%2F192.168.1.2%3A3199" | head -c 60; echo
+          curl -fsS "http://127.0.0.1:3199/socket.io/?EIO=4&transport=polling" | head -c 80; echo
+          curl -fsS http://127.0.0.1:3199/api/config; echo
+          echo "--- log ---"; cat run.log
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Start-Process -FilePath ./dist/MikDrop.exe -ArgumentList '--no-open','--keep-alive','--port','3199'
+          Start-Sleep -Seconds 5
+          (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:3199/healthz).Content
+          (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:3199/vendor/socket.io.min.js).StatusCode
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.path }}
           if-no-files-found: error
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t mikdrop .
+      - name: Smoke test (Docker)
+        run: |
+          docker run -d --name md -p 3198:3000 -e TRUST_PROXY=1 mikdrop
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:3198/healthz >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3198/healthz; echo
+          curl -fsS http://127.0.0.1:3198/vendor/socket.io.min.js -o /dev/null
+          curl -fsS "http://127.0.0.1:3198/api/qr.svg?u=http%3A%2F%2F192.168.1.2" | head -c 60; echo
+          docker ps --filter name=md --format '{{.Status}}'
+          docker logs md
 
   release:
     needs: build
