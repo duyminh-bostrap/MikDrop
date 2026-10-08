@@ -83,7 +83,7 @@ jobs:
           docker logs md
 
   release:
-    needs: build
+    needs: [build, docker]
     if: github.event_name == 'push' || inputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
