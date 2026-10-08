@@ -140,17 +140,20 @@
 
       <h3 data-i18n="sh.iosTitle"></h3>
       <div id="sh-ios">
-        <ol class="steps">
-          <li data-i18n-html="sh.ios1"></li>
-          <li data-i18n-html="sh.ios2"></li>
-          <li data-i18n-html="sh.ios3"></li>
-          <li data-i18n-html="sh.ios4"></li>
-          <li data-i18n-html="sh.ios5"></li>
-          <li data-i18n-html="sh.ios6"></li>
-          <li data-i18n-html="sh.ios7"></li>
-        </ol>
-        <div class="copybox"><span class="k" data-i18n="sh.addrA">Địa chỉ A</span><button type="button" class="copy" id="sh-devices" data-i18n-attr="title:sh.copy"></button></div>
-        <div class="copybox"><span class="k" data-i18n="sh.addrB">Địa chỉ B</span><button type="button" class="copy" id="sh-share" data-i18n-attr="title:sh.copy"></button></div>
+        <a class="btn primary install" id="sh-install" href="#" target="_blank" rel="noopener" data-i18n="sh.install" hidden>Thêm phím tắt vào iPhone</a>
+        <details id="sh-manual" open>
+          <summary data-i18n="sh.manual">Tự tạo phím tắt (khoảng 1 phút)</summary>
+          <ol class="steps">
+            <li data-i18n-html="sh.ios1"></li>
+            <li data-i18n-html="sh.ios2"></li>
+            <li data-i18n-html="sh.ios3"></li>
+            <li data-i18n-html="sh.ios4"></li>
+            <li data-i18n-html="sh.ios5"></li>
+            <li data-i18n-html="sh.ios6"></li>
+          </ol>
+          <div class="copybox"><span class="k" data-i18n="sh.addrB">Địa chỉ B</span><button type="button" class="copy" id="sh-share" data-i18n-attr="title:sh.copy"></button></div>
+          <div class="copybox"><span class="k" data-i18n="sh.addrA">Địa chỉ A</span><button type="button" class="copy" id="sh-devices" data-i18n-attr="title:sh.copy"></button></div>
+        </details>
         <p class="muted hint" data-i18n-html="sh.iosNote"></p>
       </div>
       <p class="muted hint" id="sh-ios-off" data-i18n="sh.iosOff" hidden></p>

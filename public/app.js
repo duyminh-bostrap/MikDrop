@@ -165,6 +165,7 @@
   let iceServers = [];
   let relayEnabled = true;
   let shareEnabled = false; // server có nhận tệp từ Phím tắt iPhone không
+  let shortcutUrl = '';     // liên kết iCloud của phím tắt tạo sẵn (nếu quản trị đặt SHORTCUT_URL)
   let iAmHost = false; // thiết bị này có phải chính máy chạy server (mạng nội bộ) không
   fetch('/api/config')
     .then((r) => r.json())
@@ -172,6 +173,7 @@
       if (Array.isArray(c.iceServers)) iceServers = c.iceServers;
       relayEnabled = c.relay !== false;
       shareEnabled = c.share === true;
+      shortcutUrl = typeof c.shortcutUrl === 'string' ? c.shortcutUrl : '';
     })
     .catch(() => {});
 
@@ -1397,6 +1399,9 @@
     shareHelpEl.hidden = false;
     $('#sh-ios').hidden = !shareEnabled;
     $('#sh-ios-off').hidden = shareEnabled;
+    $('#sh-install').hidden = !shortcutUrl;
+    if (shortcutUrl) $('#sh-install').href = shortcutUrl;
+    $('#sh-manual').open = !shortcutUrl; // có phím tắt tạo sẵn thì cách tự tạo thu gọn lại
     $('#sh-android-warn').hidden = window.isSecureContext;
     const isLocal = /^(localhost|127\.|\[?::1\]?$)/.test(location.hostname);
     let base = location.origin;
@@ -1405,7 +1410,7 @@
     }
     const room = myRoom ? `room=${encodeURIComponent(myRoom)}` : '';
     $('#sh-devices').textContent = `${base}/api/devices${room ? '?' + room : ''}`;
-    $('#sh-share').textContent = `${base}/api/share?${room ? room + '&' : ''}to=`;
+    $('#sh-share').textContent = `${base}/api/share?${room ? room + '&' : ''}name=`;
   }
   $('#sharebtn').addEventListener('click', () => { closeSettings(); openShareHelp(); });
   $('#sharehelp-close').addEventListener('click', () => { shareHelpEl.hidden = true; });

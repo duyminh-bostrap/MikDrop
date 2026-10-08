@@ -28,6 +28,12 @@ const ACCEPT_TTL_MS = 120000;   // người nhận không trả lời thì huỷ
 const ACK_TTL_MS = 30000;       // đã gửi xong mà không thấy xác nhận thì dọn dẹp
 const RELAY_WINDOW = 8;         // số mảnh được phép "đang bay", giống phía trình duyệt
 
+// Ảnh lấy từ app Ảnh thường có tên không đuôi ("IMG_1234"): suy đuôi từ loại tệp để máy nhận lưu đúng định dạng
+const EXT_BY_TYPE = {
+  'image/jpeg': '.jpg', 'image/png': '.png', 'image/heic': '.heic', 'image/heif': '.heif', 'image/gif': '.gif', 'image/webp': '.webp',
+  'video/quicktime': '.mov', 'video/mp4': '.mp4', 'application/pdf': '.pdf', 'text/plain': '.txt',
+};
+
 const isVirtualId = (id) => typeof id === 'string' && id.startsWith(VPREFIX);
 
 function attachShare({ app, io, peers, cleanName, roomForRequest, enabled }) {
@@ -95,9 +101,11 @@ function attachShare({ app, io, peers, cleanName, roomForRequest, enabled }) {
     if (pendingBytes + declared > MAX_TOTAL) return reject(503, 'busy');
 
     const fromName = cleanName(req.query.from) || 'iPhone';
-    const name = String(req.query.name || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim().slice(0, 200) || `file-${Date.now()}`;
+    let name = String(req.query.name || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim().slice(0, 200) || `file-${Date.now()}`;
     let type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
     if (!/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(type) || type === 'application/x-www-form-urlencoded') type = '';
+
+    if (!/\.[A-Za-z0-9]{1,8}$/.test(name) && EXT_BY_TYPE[type]) name += EXT_BY_TYPE[type];
 
     const file = path.join(ensureDir(), crypto.randomBytes(12).toString('hex'));
     let bytes = 0;

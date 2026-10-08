@@ -12,6 +12,14 @@ services:
         value: "1"
       - key: TRUSTED_IP_HEADER   # Cloudflare của Render đặt IP thật vào header này
         value: cf-connecting-ip
+      - key: SHARE_UPLOAD        # cho Phím tắt iPhone đẩy tệp từ nút Chia sẻ lên server (tệp tạm ghi ra đĩa rồi xoá)
+        value: "1"
+      - key: SHARE_MAX_FILE_MB   # Cloudflare phía trước Render giới hạn mỗi yêu cầu tải lên khoảng 100 MB
+        value: "100"
+      - key: SHARE_MAX_TOTAL_MB  # tổng dung lượng tệp tạm đang chờ (đĩa của gói miễn phí nhỏ)
+        value: "300"
+      # - key: SHORTCUT_URL   # liên kết iCloud của phím tắt MikDrop đã tạo sẵn: giao diện hiện nút "Thêm phím tắt vào iPhone"
+      #   value: "https://www.icloud.com/shortcuts/xxxxxxxx"
       - key: NODE_VERSION
         value: "22"
       # - key: RELAY        # đặt "0" để tắt chế độ dự phòng, tiết kiệm băng thông

@@ -224,6 +224,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
   font: 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text); word-break: break-all; user-select: all;
 }
 .copybox .copy:hover { border-color: var(--accent); }
+.install { display: flex; align-items: center; justify-content: center; text-decoration: none; margin: 10px 0 4px; }
+#sh-manual > summary { cursor: pointer; color: var(--accent); font-size: 13.5px; font-weight: 600; padding: 6px 0; }
 
 /* ---------- Nút ---------- */
 .btn {

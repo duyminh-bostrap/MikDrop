@@ -76,6 +76,8 @@ const PROXY_HOPS = Number(process.env.PROXY_HOPS) || 1;
 const RELAY_ENABLED = process.env.RELAY !== '0';           // RELAY=0 tắt chế độ dự phòng (tiết kiệm băng thông)
 // Nhận tệp từ Phím tắt iPhone (nút Chia sẻ). Dùng đường relay nên cần RELAY bật; trên Internet phải bật tay bằng SHARE_UPLOAD=1
 const SHARE_ENABLED = RELAY_ENABLED && (!CLOUD || process.env.SHARE_UPLOAD === '1');
+// Liên kết iCloud của phím tắt đã tạo sẵn (Phím tắt → Chia sẻ → Sao chép liên kết iCloud): giao diện hiện nút "Thêm phím tắt"
+const SHORTCUT_URL = /^https:\/\/(www\.)?icloud\.com\/shortcuts\/[\w-]+$/.test(process.env.SHORTCUT_URL || '') ? process.env.SHORTCUT_URL : '';
 const MAX_PEERS_PER_ROOM = Number(process.env.MAX_PEERS_PER_ROOM) || 50;
 
 const DEFAULT_ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
@@ -134,7 +136,7 @@ if (sea) {
   app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
 }
 app.get('/healthz', (req, res) => res.type('text').send('ok'));
-app.get('/api/config', (req, res) => res.json({ iceServers: ICE_SERVERS, relay: RELAY_ENABLED, share: SHARE_ENABLED }));
+app.get('/api/config', (req, res) => res.json({ iceServers: ICE_SERVERS, relay: RELAY_ENABLED, share: SHARE_ENABLED, shortcutUrl: SHORTCUT_URL }));
 // Android: Chrome gửi tệp vào đây khi chọn MikDrop trong nút Chia sẻ. Service worker (public/sw.js) chặn yêu cầu này;
 // nếu nó chưa chạy thì về trang chủ, người dùng tự chọn tệp.
 app.post('/share-target', (req, res) => { req.resume(); res.redirect(303, '/'); });
