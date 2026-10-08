@@ -13,6 +13,9 @@ on:
   push:
     tags: ['v*']
 
+# Runner Linux được ghim ở ubuntu-24.04 (không dùng ubuntu-latest) để môi trường build ổn định, không tự đổi khi
+# GitHub chuyển nhãn "latest" sang Ubuntu mới. Lưu ý: file Linux là bản sao của node chính thức (setup-node) nên
+# yêu cầu glibc do bản Node quyết định, không phụ thuộc vào runner này.
 jobs:
   build:
     strategy:
@@ -22,7 +25,7 @@ jobs:
             script: build:exe
             artifact: MikDrop-windows-x64
             path: dist/MikDrop.exe
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             script: build:linux
             artifact: mikdrop-linux-x64
             path: dist/mikdrop-linux-x64
@@ -68,7 +71,7 @@ jobs:
           if-no-files-found: error
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t mikdrop .
@@ -85,7 +88,7 @@ jobs:
   release:
     needs: [build, docker]
     if: github.event_name == 'push' || inputs.tag != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     env:
