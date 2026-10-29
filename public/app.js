@@ -33,7 +33,7 @@
   const STREAM_MIN = 200 * 1024 * 1024; // từ cỡ này trở lên, máy nhận (Chrome/Edge) ghi thẳng ra ổ đĩa thay vì giữ trong RAM
   const RTC_TIMEOUT = 9000;           // quá thời gian này chưa mở được kênh P2P -> dự phòng
   const RECV_TIMEOUT = 40000;         // người nhận chờ dữ liệu tối đa bao lâu
-  const MAX_FILES = 2000;
+  const MAX_FILES = 10000;
 
   const TERMINAL = new Set(['done', 'declined', 'cancelled', 'error']);
 
@@ -70,6 +70,9 @@
   }
 
   const safeName = (n) => String(n || 'file').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 200) || 'file';
+  // Đường dẫn tương đối trong thư mục được gửi ("Thư mục/con/a.txt"): bỏ phần rỗng, "." và "..", làm sạch từng đoạn
+  const safePath = (p) => String(p || '').split(/[\\/]+/).filter((s) => s && s !== '.' && s !== '..').map(safeName).join('/').slice(0, 500);
+  const relPathOf = (f) => f.relPath || f.webkitRelativePath || '';
 
   // ------------------------------------------------------------------ Thiết bị của mình
   const ICONS = {
@@ -84,6 +87,7 @@
     check: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
     warn: '<svg viewBox="0 0 24 24"><path d="M12 8v5m0 3.5v.01M10.3 4.2 2.9 17.4A2 2 0 0 0 4.7 20.4h14.6a2 2 0 0 0 1.8-3L13.7 4.2a2 2 0 0 0-3.4 0Z"/></svg>',
     close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+    chat: '<svg viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-4.5 3.5V17H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg>',
   };
 
   function detectDevice() {
@@ -272,10 +276,19 @@
     });
   }
 
+  // Chọn cả thư mục: chỉ trên máy tính (điện thoại không hỗ trợ chọn thư mục)
+  if (!(IS_IOS || /Android/i.test(navigator.userAgent)) && 'webkitdirectory' in HTMLInputElement.prototype) $('#pick-folder').hidden = false;
+  $('#pick-folder').addEventListener('click', () => $('#input-folder').click());
+  $('#input-folder').addEventListener('change', (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    addFiles(files);
+  });
+
   function addFiles(list) {
-    const seen = new Set(pending.map((f) => `${f.name}|${f.size}|${f.lastModified}`));
+    const seen = new Set(pending.map((f) => `${relPathOf(f)}|${f.name}|${f.size}|${f.lastModified}`));
     for (const f of list) {
-      const key = `${f.name}|${f.size}|${f.lastModified}`;
+      const key = `${relPathOf(f)}|${f.name}|${f.size}|${f.lastModified}`;
       if (!seen.has(key) && pending.length < MAX_FILES) { pending.push(f); seen.add(key); }
     }
     renderSheet();
@@ -311,12 +324,62 @@
     dragDepth = 0;
     $('#dropveil').hidden = true;
     document.querySelectorAll('.peer.drop').forEach((n) => n.classList.remove('drop'));
-    const files = [...e.dataTransfer.files];
-    if (!files.length) return;
+    // Phải lấy các mục thả (kể cả thư mục) ngay trong sự kiện: sau await thì dataTransfer không còn dùng được
+    const entries = [...(e.dataTransfer.items || [])].map((i) => (i.webkitGetAsEntry ? i.webkitGetAsEntry() : null)).filter(Boolean);
+    const plain = [...e.dataTransfer.files];
     const el = e.target.closest && e.target.closest('.peer');
-    addFiles(files);
-    if (el && !sheetPeerId) openSheet(el.dataset.id);
-    else if (!peers.size) toast(tr('toast.noPeers'));
+    (async () => {
+      const files = entries.some((n) => n.isDirectory) ? await walkEntries(entries) : plain;
+      if (!files.length) return;
+      addFiles(files);
+      if (el && !sheetPeerId) openSheet(el.dataset.id);
+      else if (!peers.size) toast(tr('toast.noPeers'));
+    })();
+  });
+
+  // Duyệt các thư mục được thả vào, trả về danh sách tệp kèm đường dẫn tương đối (relPath)
+  async function walkEntries(entries) {
+    const files = [];
+    const readAll = (reader) => new Promise((resolve, reject) => {
+      const all = [];
+      const next = () => reader.readEntries((batch) => { if (!batch.length) resolve(all); else { all.push(...batch); next(); } }, reject);
+      next();
+    });
+    const walk = async (entry) => {
+      if (files.length >= MAX_FILES) return;
+      if (entry.isFile) {
+        const f = await new Promise((res, rej) => entry.file(res, rej));
+        const rel = entry.fullPath.replace(/^\/+/, '');
+        if (rel.includes('/')) Object.defineProperty(f, 'relPath', { value: rel });
+        files.push(f);
+      } else if (entry.isDirectory) {
+        for (const child of await readAll(entry.createReader())) await walk(child);
+      }
+    };
+    for (const entry of entries) await walk(entry);
+    return files;
+  }
+
+  // Kéo một đoạn chữ hoặc đường dẫn (bôi đen rồi kéo) thả lên một thiết bị: gửi như tin nhắn
+  const hasText = (e) => e.dataTransfer && !hasFiles(e) && [...(e.dataTransfer.types || [])].includes('text/plain');
+  const clearDrop = () => document.querySelectorAll('.peer.drop').forEach((n) => n.classList.remove('drop'));
+  window.addEventListener('dragover', (e) => {
+    if (!hasText(e)) return;
+    clearDrop();
+    const el = e.target.closest && e.target.closest('.peer');
+    if (!el) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    el.classList.add('drop');
+  });
+  window.addEventListener('drop', (e) => {
+    if (!hasText(e)) return;
+    clearDrop();
+    const el = e.target.closest && e.target.closest('.peer');
+    if (!el) return;
+    e.preventDefault();
+    const text = (e.dataTransfer.getData('text/plain') || '').trim();
+    if (text) { socket.emit('message', { to: el.dataset.id, text }); toast(tr('toast.msgSent')); }
   });
 
   // ------------------------------------------------------------------ Ảnh xem trước
@@ -398,8 +461,7 @@
     const total = pending.reduce((s, f) => s + f.size, 0);
     $('#sheet-sub').textContent = pending.length ? `${describeFiles(pending)} · ${fmtBytes(total)}` : tr('sheet.noFiles');
     $('#sheet-empty').hidden = pending.length > 0;
-    $('#sheet-send').disabled = pending.length === 0 || chosen.length === 0;
-    $('#sheet-send').textContent = !pending.length ? tr('sheet.send') : chosen.length > 1 ? tr('sheet.sendNM', { n: pending.length, m: chosen.length }) : tr('sheet.sendN', { n: pending.length });
+    updateSendBtn();
 
     list.innerHTML = '';
     pending.slice(0, 200).forEach((f, i) => {
@@ -408,7 +470,7 @@
       const kind = kindOf(f);
       row.innerHTML = `
         <div class="thumb">${kind === 'video' ? ICONS.video : ICONS.file}</div>
-        <div class="info"><div class="fn">${esc(f.name)}</div><div class="fs">${fmtBytes(f.size)}</div></div>
+        <div class="info"><div class="fn">${esc(relPathOf(f) || f.name)}</div><div class="fs">${fmtBytes(f.size)}</div></div>
         <button class="icon-btn" type="button" data-i="${i}" aria-label="${tr('sheet.remove')}">${ICONS.close}</button>`;
       list.appendChild(row);
       if (kind === 'image') {
@@ -443,22 +505,40 @@
   });
   $('#sheet-cancel').addEventListener('click', closeSheet);
   sheet.addEventListener('click', (e) => { if (e.target === sheet) closeSheet(); });
+  // Gửi được khi có tệp hoặc có tin nhắn, và đã chọn ít nhất một thiết bị
+  function updateSendBtn() {
+    const hasText = $('#sheet-text').value.trim().length > 0;
+    const n = sheetTargets.size;
+    const btn = $('#sheet-send');
+    btn.disabled = (!pending.length && !hasText) || n === 0;
+    btn.textContent = !pending.length ? (hasText ? tr('sheet.sendMsg') : tr('sheet.send')) : n > 1 ? tr('sheet.sendNM', { n: pending.length, m: n }) : tr('sheet.sendN', { n: pending.length });
+  }
+  $('#sheet-text').addEventListener('input', updateSendBtn);
+  $('#sheet-text').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !$('#sheet-send').disabled) $('#sheet-send').click();
+  });
   $('#sheet-send').addEventListener('click', () => {
     const targets = [...sheetTargets].map((id) => peers.get(id)).filter(Boolean);
     if (!targets.length) { toast(tr('toast.pickTarget'), true); return; }
-    if (!pending.length) return;
+    const text = $('#sheet-text').value.trim();
+    if (!pending.length && !text) return;
     const files = pending;
     pending = [];
+    $('#sheet-text').value = '';
     closeSheet();
+    if (text) {
+      targets.forEach((p) => socket.emit('message', { to: p.id, text }));
+      toast(tr('toast.msgSent'));
+    }
     // Mỗi thiết bị có một lần truyền P2P riêng, chạy song song
-    targets.forEach((p) => startSend(p, files));
+    if (files.length) targets.forEach((p) => startSend(p, files));
   });
 
   // ------------------------------------------------------------------ Phía gửi
   function startSend(peer, files) {
     const t = {
       id: uid(), dir: 'send', peerId: peer.id, peerName: peer.name, peerType: peer.type,
-      files, metas: files.map((f) => ({ name: f.name, size: f.size, type: f.type || '' })),
+      files, metas: files.map((f) => ({ name: f.name, path: relPathOf(f), size: f.size, type: f.type || '' })),
       total: files.reduce((s, f) => s + f.size, 0), done: 0, sent: 0, status: 'waiting',
       mode: 'rtc', pendingCands: [], remoteSet: false,
     };
@@ -638,7 +718,7 @@
     try {
       for (let i = 0; i < t.files.length; i++) {
         const f = t.files[i];
-        await io.sendCtrl({ t: 'start', i, name: f.name, size: f.size, type: f.type || '' });
+        await io.sendCtrl({ t: 'start', i, name: f.name, path: relPathOf(f), size: f.size, type: f.type || '' });
         // Đọc theo khối lớn và đọc trước khối kế tiếp trong lúc đang gửi khối hiện tại,
         // để việc đọc ổ đĩa (hoặc thư viện ảnh) không làm đường truyền phải chờ.
         const readBlock = (off) => f.slice(off, Math.min(off + READ_BLOCK, f.size)).arrayBuffer();
@@ -677,18 +757,18 @@
   // ------------------------------------------------------------------ Phía nhận
   socket.on('transfer-request', (m) => {
     if (!m || typeof m.transferId !== 'string' || !Array.isArray(m.files) || !m.files.length || m.files.length > MAX_FILES) return;
-    const metas = m.files.map((f) => ({ name: safeName(f.name), size: Math.max(0, Number(f.size) || 0), type: String(f.type || '') }));
+    const metas = m.files.map((f) => ({ name: safeName(f.name), path: safePath(f.path), size: Math.max(0, Number(f.size) || 0), type: String(f.type || '') }));
     const peer = peers.get(m.from);
     const t = {
       id: m.transferId, dir: 'recv', peerId: m.from, peerName: peer ? peer.name : String(m.fromName || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40) || tr('in.unknown'),
       peerType: peer ? peer.type : ['phone', 'tablet', 'laptop', 'desktop'].includes(m.fromType) ? m.fromType : 'desktop',
-      metas, thumbs: Array.isArray(m.thumbs) ? m.thumbs.slice(0, 4) : [], total: metas.reduce((s, f) => s + f.size, 0),
+      metas, isFolder: metas.some((f) => f.path.includes('/')), thumbs: Array.isArray(m.thumbs) ? m.thumbs.slice(0, 4) : [], total: metas.reduce((s, f) => s + f.size, 0),
       done: 0, status: 'incoming', received: [], cur: null, pendingCands: [], remoteSet: false, mode: 'rtc',
     };
     transfers.set(t.id, t);
     incoming.push(t);
     showIncoming();
-    alertUser(t);
+    alertUser(tr('in.notify', { name: t.peerName }), tr('in.title', { name: t.peerName, what: describeFiles(t.metas) }));
   });
 
   const incomingEl = $('#incoming');
@@ -705,9 +785,8 @@
     $('#in-avatar').innerHTML = ICONS[t.peerType] || ICONS.desktop;
     $('#in-title').textContent = tr('in.title', { name: t.peerName, what: describeFiles(t.metas) });
     let sub = tr('in.sub', { n: t.metas.length, size: fmtBytes(t.total) });
-    if (t.total >= STREAM_MIN) {
-      sub += CAN_STREAM ? tr('in.bigStream') : tr('in.bigRam');
-    }
+    if (t.isFolder) sub += CAN_STREAM ? tr('in.folderDisk') : tr('in.folderZip');
+    else if (t.total >= STREAM_MIN) sub += CAN_STREAM ? tr('in.bigStream') : tr('in.bigRam');
     $('#in-sub').textContent = sub;
 
     const pv = $('#in-previews');
@@ -727,7 +806,7 @@
 
     const names = $('#in-names');
     names.innerHTML = '';
-    if (!t.thumbs.length) t.metas.slice(0, 4).forEach((f) => names.insertAdjacentHTML('beforeend', `<li>${esc(f.name)} · ${fmtBytes(f.size)}</li>`));
+    if (!t.thumbs.length) t.metas.slice(0, 4).forEach((f) => names.insertAdjacentHTML('beforeend', `<li>${esc(f.path || f.name)} · ${fmtBytes(f.size)}</li>`));
     if (!t.thumbs.length && t.metas.length > 4) names.insertAdjacentHTML('beforeend', `<li>${tr('sheet.more', { n: t.metas.length - 4 })}</li>`);
 
     const q = $('#in-queue');
@@ -828,9 +907,9 @@
 
   // Phải gọi ngay trong sự kiện bấm "Chấp nhận" vì hộp thoại chọn nơi lưu cần thao tác của người dùng
   async function chooseSink(t) {
-    if (!CAN_STREAM || t.total < STREAM_MIN) return null;
+    if (!CAN_STREAM || (t.total < STREAM_MIN && !t.isFolder)) return null;
     try {
-      if (t.metas.length === 1) return { kind: 'file', handle: await window.showSaveFilePicker({ suggestedName: t.metas[0].name }) };
+      if (t.metas.length === 1 && !t.isFolder) return { kind: 'file', handle: await window.showSaveFilePicker({ suggestedName: t.metas[0].name }) };
       return { kind: 'dir', dir: await window.showDirectoryPicker({ mode: 'readwrite' }) };
     } catch (err) {
       return null; // người dùng đóng hộp thoại: nhận vào bộ nhớ như bình thường
@@ -848,11 +927,83 @@
     }
   }
 
+  // Tạo (nếu chưa có) các thư mục con của một tệp trong thư mục đích
+  async function dirFor(dir, path) {
+    for (const part of path.split('/').slice(0, -1)) dir = await dir.getDirectoryHandle(part, { create: true });
+    return dir;
+  }
+
   // Các thao tác ghi đĩa chạy tuần tự theo thứ tự dữ liệu đến
   function enqueue(t, fn) {
     t.chain = (t.chain || Promise.resolve())
       .then(() => (TERMINAL.has(t.status) ? null : fn()))
       .catch((err) => fail(t, 'err.disk', { msg: (err && err.message) || String(err) }));
+  }
+
+  const CRC_TABLE = (() => {
+    const tab = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      tab[n] = c >>> 0;
+    }
+    return tab;
+  })();
+  const crc32 = (u8) => {
+    let c = 0xffffffff;
+    for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+
+  // ZIP không nén ("store"), đủ để gom cả thư mục thành một tệp trên trình duyệt không ghi được thư mục.
+  // shortcut: không hỗ trợ ZIP64, quá 4 GB hoặc 65535 tệp thì ném lỗi và lưu từng tệp riêng, nâng cấp khi cần.
+  async function buildZip(entries) {
+    if (entries.length > 65535) throw new Error('zip-too-many');
+    const enc = new TextEncoder();
+    const parts = [];
+    const central = [];
+    let offset = 0;
+    const now = new Date();
+    const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    for (const e of entries) {
+      const name = enc.encode(e.path);
+      const size = e.blob.size;
+      if (size > 0xffffffff || offset > 0xffffffff) throw new Error('zip-too-big');
+      const crc = crc32(new Uint8Array(await e.blob.arrayBuffer()));
+      const local = new DataView(new ArrayBuffer(30));
+      local.setUint32(0, 0x04034b50, true); local.setUint16(4, 20, true); local.setUint16(6, 0x0800, true); // 0x0800: tên UTF-8
+      local.setUint16(10, dosTime, true); local.setUint16(12, dosDate, true);
+      local.setUint32(14, crc, true); local.setUint32(18, size, true); local.setUint32(22, size, true); local.setUint16(26, name.length, true);
+      parts.push(local.buffer, name, e.blob);
+      const cen = new DataView(new ArrayBuffer(46));
+      cen.setUint32(0, 0x02014b50, true); cen.setUint16(4, 20, true); cen.setUint16(6, 20, true); cen.setUint16(8, 0x0800, true);
+      cen.setUint16(12, dosTime, true); cen.setUint16(14, dosDate, true);
+      cen.setUint32(16, crc, true); cen.setUint32(20, size, true); cen.setUint32(24, size, true); cen.setUint16(28, name.length, true);
+      cen.setUint32(42, offset, true);
+      central.push(cen.buffer, name);
+      offset += 30 + name.length + size;
+    }
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+    end.setUint32(12, central.reduce((s, p) => s + p.byteLength, 0), true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
+  }
+
+  // Nhận thư mục trên trình duyệt không ghi được thư mục: gom các tệp đã nhận thành một .zip rồi lưu
+  async function zipReceived(t) {
+    try {
+      const entries = t.received.map((r) => ({ path: r.path || r.name, blob: r.blob }));
+      const roots = new Set(entries.map((e) => e.path.split('/')[0]));
+      const blob = await buildZip(entries);
+      t.received.forEach((r) => r.url && URL.revokeObjectURL(r.url));
+      const rec = { name: `${roots.size === 1 ? [...roots][0] : 'MikDrop'}.zip`, size: blob.size, type: 'application/zip', blob, url: URL.createObjectURL(blob) };
+      t.received = [rec];
+      upsertCard(t);
+      if (AUTO_SAVE) saveFile(rec);
+    } catch (err) {
+      if (AUTO_SAVE) t.received.forEach((r) => saveFile(r)); // quá lớn để nén: lưu từng tệp riêng
+    }
   }
 
   function finishRecv(t) {
@@ -864,6 +1015,7 @@
     sendBack(t, { t: 'ack' });
     setTimeout(() => closePeer(t), 3000);
     upsertCard(t);
+    if (t.isFolder && !t.sink) zipReceived(t);
   }
 
   function onRecvCtrl(t, msg) {
@@ -871,11 +1023,11 @@
     if (msg.t === 'start') {
       clearTimeout(t.recvTimer);
       if (t.status !== 'receiving') { t.status = 'receiving'; t.startedAt = performance.now(); upsertCard(t); }
-      const c = { i: msg.i, name: safeName(msg.name), size: Number(msg.size) || 0, type: String(msg.type || ''), chunks: [], got: 0, writer: null };
+      const c = { i: msg.i, name: safeName(msg.name), path: safePath(msg.path), size: Number(msg.size) || 0, type: String(msg.type || ''), chunks: [], got: 0, writer: null };
       t.cur = c;
       if (t.sink) {
         enqueue(t, async () => {
-          const handle = t.sink.kind === 'file' ? t.sink.handle : await uniqueFileHandle(t.sink.dir, c.name);
+          const handle = t.sink.kind === 'file' ? t.sink.handle : await uniqueFileHandle(await dirFor(t.sink.dir, c.path), c.name);
           c.savedName = handle.name;
           c.writer = await handle.createWritable();
         });
@@ -893,9 +1045,9 @@
         return;
       }
       const blob = new Blob(c.chunks, { type: c.type || 'application/octet-stream' });
-      const rec = { name: c.name, size: blob.size, type: c.type, blob, url: URL.createObjectURL(blob) };
+      const rec = { name: c.name, path: c.path, size: blob.size, type: c.type, blob, url: URL.createObjectURL(blob) };
       t.received.push(rec);
-      if (AUTO_SAVE) saveFile(rec);
+      if (AUTO_SAVE && !t.isFolder) saveFile(rec); // thư mục không ghi thẳng ra đĩa được thì gom thành .zip khi nhận xong
     } else if (msg.t === 'done') {
       if (t.sink) enqueue(t, () => finishRecv(t));
       else finishRecv(t);
@@ -1129,6 +1281,13 @@
     const btn = e.target.closest('[data-act]');
     const card = e.target.closest('.card');
     if (!btn || !card) return;
+    if (card.id.startsWith('m-')) {
+      const m = messages.get(card.id.slice(2));
+      if (!m) return;
+      if (btn.dataset.act === 'msg-copy') copyText(m.text);
+      else if (btn.dataset.act === 'msg-close') { messages.delete(m.id); card.remove(); syncTray(); }
+      return;
+    }
     const t = transfers.get(card.id.slice(2));
     if (!t) return;
     switch (btn.dataset.act) {
@@ -1139,22 +1298,54 @@
     }
   });
 
+  // ------------------------------------------------------------------ Tin nhắn văn bản
+  // Hiện thành một thẻ trong khay (chỉ chữ, đường dẫn http/https bấm được), có nút sao chép. Không tải gì về nên không cần xác nhận.
+  const messages = new Map(); // id -> { id, name, text }
+  const linkify = (s) => esc(s).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
+
+  function renderMessage(m) {
+    let el = document.getElementById('m-' + m.id);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'm-' + m.id;
+      tray.prepend(el);
+    }
+    el.className = 'card msg';
+    el.innerHTML = `
+      <div class="card-row">
+        <div class="dir">${ICONS.chat}</div>
+        <div class="card-main"><div class="card-title">${tr('msg.from', { name: esc(m.name) })}</div></div>
+        <button class="icon-btn" type="button" data-act="msg-close" aria-label="${tr('card.close')}">${ICONS.close}</button>
+      </div>
+      <div class="msg-text">${linkify(m.text)}</div>
+      <button class="btn small" type="button" data-act="msg-copy">${tr('msg.copy')}</button>`;
+    syncTray();
+  }
+
+  socket.on('message', (m) => {
+    if (!m || typeof m.text !== 'string' || !m.text.trim()) return;
+    const peer = peers.get(m.from);
+    const msg = { id: uid(), name: peer ? peer.name : tr('in.unknown'), text: m.text.slice(0, 4000) };
+    messages.set(msg.id, msg);
+    renderMessage(msg);
+    alertUser(`● ${tr('msg.from', { name: msg.name })}`, msg.text.slice(0, 120));
+  });
+
   // ------------------------------------------------------------------ Thông báo
   const baseTitle = document.title;
   let flashTimer = null;
-  function alertUser(t) {
+  // title: chữ nhấp nháy trên thẻ trình duyệt; body: nội dung thông báo hệ thống (khi trang đang ẩn)
+  function alertUser(title, body) {
     if (navigator.vibrate) navigator.vibrate([90, 50, 90]);
     if (!document.hidden) return;
     let on = false;
     clearInterval(flashTimer);
     flashTimer = setInterval(() => {
       on = !on;
-      document.title = on ? tr('in.notify', { name: t.peerName }) : baseTitle;
+      document.title = on ? title : baseTitle;
     }, 900);
     try {
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('MikDrop', { body: tr('in.title', { name: t.peerName, what: describeFiles(t.metas) }) });
-      }
+      if ('Notification' in window && Notification.permission === 'granted') new Notification('MikDrop', { body });
     } catch (e) { /* bỏ qua */ }
   }
   document.addEventListener('visibilitychange', () => {
@@ -1254,6 +1445,7 @@
     renderSheet();
     showIncoming();
     for (const t of transfers.values()) upsertCard(t);
+    for (const m of messages.values()) renderMessage(m);
     if (!inviteEl.hidden) renderInvite();
     $('#speed-run').textContent = speedBusy ? tr('sp.running') : tr('sp.rerun');
     if (!settingsEl.hidden) renderSettings();

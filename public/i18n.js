@@ -37,6 +37,7 @@
       // --- bảng gửi
       'pick.photos': 'Ảnh & video',
       'pick.files': 'Tệp',
+      'pick.folder': 'Thư mục',
       'sheet.empty': 'Chọn ảnh, tệp hoặc kéo thả vào đây',
       'sheet.cancel': 'Huỷ',
       'sheet.send': 'Gửi',
@@ -49,6 +50,11 @@
       'sheet.sendN': ({ n }) => `Gửi ${n} tệp`,
       'sheet.sendNM': ({ n, m }) => `Gửi ${n} tệp tới ${m} máy`,
       'sheet.remove': 'Bỏ tệp này',
+      'sheet.msgPh': 'Nhập tin nhắn hoặc dán đường dẫn…',
+      'sheet.sendMsg': 'Gửi tin nhắn',
+      'toast.msgSent': 'Đã gửi tin nhắn.',
+      'msg.from': ({ name }) => `${name} gửi tin nhắn`,
+      'msg.copy': 'Sao chép',
       'sheet.more': ({ n }) => `… và ${n} tệp khác`,
 
       // --- mô tả số lượng tệp
@@ -64,6 +70,8 @@
       'in.title': ({ name, what }) => `${name} muốn gửi ${what}`,
       'in.sub': ({ n, size }) => `${n} tệp · ${size}`,
       'in.bigStream': '. Bạn sẽ được chọn nơi lưu, tệp ghi thẳng ra ổ đĩa.',
+      'in.folderDisk': '. Bạn sẽ chọn thư mục để lưu, cấu trúc thư mục con được giữ nguyên.',
+      'in.folderZip': '. Trình duyệt này không ghi được thư mục nên sẽ lưu thành một tệp .zip.',
       'in.bigRam': '. Tệp lớn được giữ trong bộ nhớ cho đến khi nhận xong; có thể lỗi nếu thiết bị thiếu RAM.',
       'in.queue': ({ n }) => `Còn ${n} yêu cầu khác đang chờ`,
       'in.unknown': 'Thiết bị lạ',
@@ -229,6 +237,7 @@
 
       'pick.photos': 'Photos & videos',
       'pick.files': 'Files',
+      'pick.folder': 'Folder',
       'sheet.empty': 'Choose photos or files, or drag and drop them here',
       'sheet.cancel': 'Cancel',
       'sheet.send': 'Send',
@@ -241,6 +250,11 @@
       'sheet.sendN': ({ n }) => `Send ${plural(n, 'file', 'files')}`,
       'sheet.sendNM': ({ n, m }) => `Send ${plural(n, 'file', 'files')} to ${m} devices`,
       'sheet.remove': 'Remove this file',
+      'sheet.msgPh': 'Type a message or paste a link…',
+      'sheet.sendMsg': 'Send message',
+      'toast.msgSent': 'Message sent.',
+      'msg.from': ({ name }) => `${name} sent a message`,
+      'msg.copy': 'Copy',
       'sheet.more': ({ n }) => `… and ${n} more`,
 
       'n.image': ({ n }) => plural(n, 'image', 'images'),
@@ -254,6 +268,8 @@
       'in.title': ({ name, what }) => `${name} wants to send ${what}`,
       'in.sub': ({ n, size }) => `${plural(n, 'file', 'files')} · ${size}`,
       'in.bigStream': '. You will be asked where to save, and the file is written straight to disk.',
+      'in.folderDisk': '. You will pick a folder to save into; subfolders are kept as they are.',
+      'in.folderZip': '. This browser cannot write folders, so it will save a single .zip file.',
       'in.bigRam': '. Large files are kept in memory until received; this may fail if the device runs low on RAM.',
       'in.queue': ({ n }) => `${plural(n, 'more request', 'more requests')} waiting`,
       'in.unknown': 'Unknown device',

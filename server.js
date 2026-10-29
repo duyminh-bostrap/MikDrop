@@ -79,6 +79,7 @@ const SHARE_ENABLED = RELAY_ENABLED && (!CLOUD || process.env.SHARE_UPLOAD === '
 // Liên kết iCloud của phím tắt đã tạo sẵn (Phím tắt → Chia sẻ → Sao chép liên kết iCloud): giao diện hiện nút "Thêm phím tắt"
 const SHORTCUT_URL = /^https:\/\/(www\.)?icloud\.com\/shortcuts\/[\w-]+$/.test(process.env.SHORTCUT_URL || '') ? process.env.SHORTCUT_URL : '';
 const MAX_PEERS_PER_ROOM = Number(process.env.MAX_PEERS_PER_ROOM) || 50;
+const MAX_MESSAGE_LEN = 4000;   // độ dài tối đa một tin nhắn văn bản
 
 const DEFAULT_ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
 // Chạy trong LAN: không cần STUN (và hoạt động được cả khi mất Internet). Chạy trên Internet: dùng STUN.
@@ -393,6 +394,18 @@ function attachSignaling(io) {
         target.emit(event, { ...msg, from: socket.id });
       });
     }
+
+    // Tin nhắn văn bản: chuyển thẳng tới thiết bị cùng phòng, không lưu. Giới hạn độ dài và 30 tin/phút để không bị dùng làm phiền.
+    socket.on('message', (msg) => {
+      if (!peers.has(socket.id) || !msg || typeof msg.to !== 'string' || typeof msg.text !== 'string') return;
+      const text = msg.text.slice(0, MAX_MESSAGE_LEN);
+      const now = Date.now();
+      const recent = (socket.data.msgTimes = (socket.data.msgTimes || []).filter((t) => now - t < 60000));
+      const target = sameRoomTarget(msg);
+      if (!text.trim() || recent.length >= 30 || !target) return;
+      recent.push(now);
+      target.emit('message', { from: socket.id, text });
+    });
 
     // Chế độ dự phòng: chuyển tiếp từng mảnh dữ liệu (không lưu), có xác nhận để điều tiết tốc độ
     socket.on('relay', (msg, ack) => {

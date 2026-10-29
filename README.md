@@ -5,6 +5,8 @@ Chia sẻ ảnh và tệp ngang hàng (P2P) giữa iPhone, Android, MacBook, Win
 - **Tự động phát hiện thiết bị** cùng mạng (radar).
 - **Truyền P2P bằng WebRTC DataChannel**: tệp đi thẳng giữa hai thiết bị, server không lưu tệp.
 - **Chọn nhiều ảnh** từ Thư viện ảnh (iOS) hoặc **kéo thả** tệp (Windows/macOS).
+- **Gửi nguyên thư mục** (trên máy tính): nút **Thư mục** hoặc kéo thả cả thư mục vào cửa sổ. Bên nhận dùng Chrome/Edge qua HTTPS hoặc localhost thì chọn thư mục để lưu, giữ nguyên cấu trúc thư mục con; trình duyệt khác nhận về một tệp `.zip`.
+- **Gửi cả tin nhắn**: trong bảng gửi có ô nhập chữ hoặc dán đường dẫn (Ctrl+Enter để gửi), hoặc bôi đen một đoạn chữ rồi kéo thả lên thiết bị. Bên nhận thấy thẻ tin nhắn có nút **Sao chép**, đường dẫn bấm được. Tin nhắn không được lưu trên server.
 - **Xác nhận trước khi nhận**: bên nhận thấy popup *"X muốn gửi 3 hình ảnh"* kèm ảnh xem trước, với nút [Chấp nhận] / [Từ chối].
 - Có thanh tiến trình và tự lưu tệp về máy sau khi nhận.
 - Có **chế độ dự phòng**: nếu mạng chặn P2P (AP isolation, mDNS lỗi), tệp được chuyển tiếp qua server trong RAM, không ghi đĩa.

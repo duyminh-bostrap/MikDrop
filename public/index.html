@@ -84,7 +84,12 @@
           <svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5"/></svg>
           <span data-i18n="pick.files">Tệp</span>
         </button>
+        <button class="pick" id="pick-folder" type="button" hidden>
+          <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>
+          <span data-i18n="pick.folder">Thư mục</span>
+        </button>
       </div>
+      <textarea class="msg-input" id="sheet-text" rows="2" maxlength="4000" data-i18n-attr="placeholder:sheet.msgPh" placeholder="Nhập tin nhắn hoặc dán đường dẫn…"></textarea>
       <div class="file-list" id="sheet-list"></div>
       <div class="sheet-empty" id="sheet-empty" data-i18n="sheet.empty">Chọn ảnh, tệp hoặc kéo thả vào đây</div>
       <div class="actions">
@@ -235,6 +240,7 @@
 
   <input class="vh" id="input-photos" type="file" accept="image/*,video/*" multiple>
   <input class="vh" id="input-files" type="file" multiple>
+  <input class="vh" id="input-folder" type="file" webkitdirectory multiple>
 
   <script src="vendor/socket.io.min.js"></script>
   <script src="i18n.js"></script>
