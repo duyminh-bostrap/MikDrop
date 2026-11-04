@@ -37,7 +37,9 @@
       // --- bảng gửi
       'pick.photos': 'Ảnh & video',
       'pick.files': 'Tệp',
-      'pick.folder': 'Thư mục',
+      'pick.folder': 'Thư mục (ZIP)',
+      'toast.zipping': 'Đang tạo ZIP thư mục…',
+      'err.zip': 'Không tạo được ZIP',
       'sheet.empty': 'Chọn ảnh, tệp hoặc kéo thả vào đây',
       'sheet.cancel': 'Huỷ',
       'sheet.send': 'Gửi',
@@ -237,7 +239,9 @@
 
       'pick.photos': 'Photos & videos',
       'pick.files': 'Files',
-      'pick.folder': 'Folder',
+      'pick.folder': 'Folder (ZIP)',
+      'toast.zipping': 'Creating folder ZIP…',
+      'err.zip': 'Could not create ZIP',
       'sheet.empty': 'Choose photos or files, or drag and drop them here',
       'sheet.cancel': 'Cancel',
       'sheet.send': 'Send',

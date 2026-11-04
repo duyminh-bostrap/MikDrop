@@ -282,8 +282,28 @@
   $('#input-folder').addEventListener('change', (e) => {
     const files = [...e.target.files];
     e.target.value = '';
-    addFiles(files);
+    addFolders(files);
   });
+
+  async function addFolders(files) {
+    const folders = new Map();
+    const result = [];
+    for (const f of files) {
+      const path = relPathOf(f);
+      if (!path.includes('/')) { result.push(f); continue; }
+      const root = path.split('/')[0];
+      if (!folders.has(root)) folders.set(root, []);
+      folders.get(root).push({ path, blob: f });
+    }
+    try {
+      if (folders.size) toast(tr('toast.zipping'));
+      for (const [root, entries] of folders) {
+        const blob = await buildZip(entries);
+        result.push(new File([blob], `${root}.zip`, { type: 'application/zip' }));
+      }
+      addFiles(result);
+    } catch (err) { toast(tr('err.zip') + ': ' + err.message, true); }
+  }
 
   function addFiles(list) {
     const seen = new Set(pending.map((f) => `${relPathOf(f)}|${f.name}|${f.size}|${f.lastModified}`));
@@ -331,10 +351,10 @@
     (async () => {
       const files = entries.some((n) => n.isDirectory) ? await walkEntries(entries) : plain;
       if (!files.length) return;
-      addFiles(files);
+      await addFolders(files);
       if (el && !sheetPeerId) openSheet(el.dataset.id);
       else if (!peers.size) toast(tr('toast.noPeers'));
-    })();
+    })().catch((err) => toast(err.message, true));
   });
 
   // Duyệt các thư mục được thả vào, trả về danh sách tệp kèm đường dẫn tương đối (relPath)
@@ -346,7 +366,7 @@
       next();
     });
     const walk = async (entry) => {
-      if (files.length >= MAX_FILES) return;
+      if (files.length >= MAX_FILES) throw new Error(tr('err.zip') + ': ' + MAX_FILES + ' files maximum');
       if (entry.isFile) {
         const f = await new Promise((res, rej) => entry.file(res, rej));
         const rel = entry.fullPath.replace(/^\/+/, '');
@@ -565,6 +585,7 @@
   socket.on('transfer-accept', async (m) => {
     const t = mine(m, 'send');
     if (!t || t.status !== 'waiting') return;
+    t.flow = !!m.flow;
     t.status = 'connecting';
     upsertCard(t);
     // Chạy trong mạng nội bộ và một đầu là chính máy chạy server (ví dụ PC chạy MikDrop.exe):
@@ -734,6 +755,16 @@
             t.done = Math.max(0, t.sent - io.inflight());
             tick(t);
           }
+          if (t.flow) {
+            let timer;
+            try {
+              await new Promise((resolve, reject) => {
+                t.credit = resolve;
+                timer = setTimeout(() => reject(new Error('err.connLost')), 60000);
+                io.sendCtrl({ t: 'checkpoint' }).catch(reject);
+              });
+            } finally { clearTimeout(timer); t.credit = null; }
+          }
         }
         await io.sendCtrl({ t: 'end', i });
       }
@@ -745,6 +776,7 @@
   }
 
   function onSenderCtrl(t, msg) {
+    if (msg && msg.t === 'credit') { if (t.credit) t.credit(); return; }
     if (msg && msg.t === 'ack' && !TERMINAL.has(t.status)) {
       t.done = t.total;
       t.status = 'done';
@@ -819,11 +851,17 @@
     if (!t) return;
     const sinkPromise = chooseSink(t); // gọi ngay, không có await phía trước, để còn "thao tác của người dùng"
     showIncoming();
-    t.sink = await sinkPromise;
+    try { t.sink = await sinkPromise; } catch (err) {
+      t.status = 'declined';
+      socket.emit('transfer-decline', { to: t.peerId, transferId: t.id });
+      upsertCard(t);
+      showIncoming();
+      return;
+    }
     if (TERMINAL.has(t.status)) return; // người gửi đã huỷ trong lúc chọn nơi lưu
     t.status = 'connecting';
     t.recvTimer = setTimeout(() => { if (t.status === 'connecting') fail(t, 'err.timeout'); }, RECV_TIMEOUT);
-    socket.emit('transfer-accept', { to: t.peerId, transferId: t.id });
+    socket.emit('transfer-accept', { to: t.peerId, transferId: t.id, flow: true });
     upsertCard(t);
     showIncoming();
   });
@@ -903,16 +941,18 @@
   }
 
   // --- Ghi thẳng ra ổ đĩa cho tệp lớn (File System Access API: Chrome/Edge, trên localhost hoặc HTTPS) ---
-  const CAN_STREAM = !!(window.isSecureContext && window.showSaveFilePicker && window.showDirectoryPicker);
+  const CAN_STREAM = !!(window.isSecureContext && window.showSaveFilePicker);
 
   // Phải gọi ngay trong sự kiện bấm "Chấp nhận" vì hộp thoại chọn nơi lưu cần thao tác của người dùng
   async function chooseSink(t) {
     if (!CAN_STREAM || (t.total < STREAM_MIN && !t.isFolder)) return null;
     try {
       if (t.metas.length === 1 && !t.isFolder) return { kind: 'file', handle: await window.showSaveFilePicker({ suggestedName: t.metas[0].name }) };
-      return { kind: 'dir', dir: await window.showDirectoryPicker({ mode: 'readwrite' }) };
+      if (window.showDirectoryPicker) return { kind: 'dir', dir: await window.showDirectoryPicker({ mode: 'readwrite' }) };
+      return null;
     } catch (err) {
-      return null; // người dùng đóng hộp thoại: nhận vào bộ nhớ như bình thường
+      if (err.name === 'AbortError' || t.total >= STREAM_MIN) throw err;
+      return null;
     }
   }
 
@@ -949,13 +989,7 @@
     }
     return tab;
   })();
-  const crc32 = (u8) => {
-    let c = 0xffffffff;
-    for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xff] ^ (c >>> 8);
-    return (c ^ 0xffffffff) >>> 0;
-  };
-
-  // ZIP không nén ("store"), đủ để gom cả thư mục thành một tệp trên trình duyệt không ghi được thư mục.
+  // Tạo ZIP, nén DEFLATE khi trình duyệt hỗ trợ; đọc CRC theo khối để tránh cấp phát nguyên tệp.
   // shortcut: không hỗ trợ ZIP64, quá 4 GB hoặc 65535 tệp thì ném lỗi và lưu từng tệp riêng, nâng cấp khi cần.
   async function buildZip(entries) {
     if (entries.length > 65535) throw new Error('zip-too-many');
@@ -968,22 +1002,40 @@
     const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
     for (const e of entries) {
       const name = enc.encode(e.path);
-      const size = e.blob.size;
-      if (size > 0xffffffff || offset > 0xffffffff) throw new Error('zip-too-big');
-      const crc = crc32(new Uint8Array(await e.blob.arrayBuffer()));
+      const originalSize = e.blob.size;
+      if (originalSize > 0xffffffff || offset > 0xffffffff) throw new Error('zip-too-big');
+      let state = 0xffffffff;
+      for (let off = 0; off < originalSize; off += READ_BLOCK) {
+        const chunk = new Uint8Array(await e.blob.slice(off, off + READ_BLOCK).arrayBuffer());
+        for (const byte of chunk) state = CRC_TABLE[(state ^ byte) & 0xff] ^ (state >>> 8);
+      }
+      const crc = (state ^ 0xffffffff) >>> 0;
+      let payload = e.blob;
+      let method = 0;
+      // shortcut: browsers without raw DEFLATE store entries; use a ZIP library if compression is required there.
+      let compressor;
+      try { compressor = new CompressionStream('deflate-raw'); } catch (err) { /* store */ }
+      if (compressor) {
+        const compressed = await new Response(e.blob.stream().pipeThrough(compressor)).blob();
+        if (compressed.size < originalSize) { payload = compressed; method = 8; }
+      }
+      const size = payload.size;
       const local = new DataView(new ArrayBuffer(30));
       local.setUint32(0, 0x04034b50, true); local.setUint16(4, 20, true); local.setUint16(6, 0x0800, true); // 0x0800: tên UTF-8
       local.setUint16(10, dosTime, true); local.setUint16(12, dosDate, true);
-      local.setUint32(14, crc, true); local.setUint32(18, size, true); local.setUint32(22, size, true); local.setUint16(26, name.length, true);
-      parts.push(local.buffer, name, e.blob);
+      local.setUint32(14, crc, true); local.setUint32(18, size, true); local.setUint32(22, originalSize, true); local.setUint16(26, name.length, true);
+      local.setUint16(8, method, true);
+      parts.push(local.buffer, name, payload);
       const cen = new DataView(new ArrayBuffer(46));
       cen.setUint32(0, 0x02014b50, true); cen.setUint16(4, 20, true); cen.setUint16(6, 20, true); cen.setUint16(8, 0x0800, true);
       cen.setUint16(12, dosTime, true); cen.setUint16(14, dosDate, true);
-      cen.setUint32(16, crc, true); cen.setUint32(20, size, true); cen.setUint32(24, size, true); cen.setUint16(28, name.length, true);
+      cen.setUint32(16, crc, true); cen.setUint32(20, size, true); cen.setUint32(24, originalSize, true); cen.setUint16(28, name.length, true);
       cen.setUint32(42, offset, true);
+      cen.setUint16(10, method, true);
       central.push(cen.buffer, name);
       offset += 30 + name.length + size;
     }
+    if (offset > 0xffffffff) throw new Error('zip-too-big');
     const end = new DataView(new ArrayBuffer(22));
     end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
     end.setUint32(12, central.reduce((s, p) => s + p.byteLength, 0), true); end.setUint32(16, offset, true);
@@ -1020,7 +1072,10 @@
 
   function onRecvCtrl(t, msg) {
     if (TERMINAL.has(t.status) || !msg) return;
-    if (msg.t === 'start') {
+    if (msg.t === 'checkpoint') {
+      if (t.sink) enqueue(t, () => sendBack(t, { t: 'credit' }));
+      else sendBack(t, { t: 'credit' });
+    } else if (msg.t === 'start') {
       clearTimeout(t.recvTimer);
       if (t.status !== 'receiving') { t.status = 'receiving'; t.startedAt = performance.now(); upsertCard(t); }
       const c = { i: msg.i, name: safeName(msg.name), path: safePath(msg.path), size: Number(msg.size) || 0, type: String(msg.type || ''), chunks: [], got: 0, writer: null };
@@ -1045,6 +1100,7 @@
         return;
       }
       const blob = new Blob(c.chunks, { type: c.type || 'application/octet-stream' });
+      c.chunks = [];
       const rec = { name: c.name, path: c.path, size: blob.size, type: c.type, blob, url: URL.createObjectURL(blob) };
       t.received.push(rec);
       if (AUTO_SAVE && !t.isFolder) saveFile(rec); // thư mục không ghi thẳng ra đĩa được thì gom thành .zip khi nhận xong
@@ -1071,15 +1127,16 @@
 
   // Dữ liệu đi qua server ở chế độ dự phòng
   socket.on('relay', (m, cb) => {
-    if (typeof cb === 'function') cb();
+    const ack = () => { if (typeof cb === 'function') cb(); };
     const t = mine(m);
-    if (!t || t.mode !== 'relay') return;
+    if (!t || t.mode !== 'relay') { ack(); return; }
     if (t.dir === 'recv') {
       if (m.kind === 'ctrl') onRecvCtrl(t, m.data);
       else if (m.kind === 'bin') onRecvBin(t, m.data instanceof ArrayBuffer ? m.data : new Uint8Array(m.data).buffer);
     } else if (m.kind === 'ctrl') {
       onSenderCtrl(t, m.data);
     }
+    if (t.chain) t.chain.finally(ack); else ack();
   });
 
   // ------------------------------------------------------------------ Lưu tệp
