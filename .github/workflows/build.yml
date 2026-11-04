@@ -40,6 +40,7 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      - run: node tests/transfer.cjs
       - run: npm run ${{ matrix.script }}
 
       # Chạy thử file vừa build trên chính runner (x64 và arm64 đều là máy thật) để chắc chắn nó khởi động được

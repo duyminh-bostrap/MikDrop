@@ -193,7 +193,11 @@
     renderRoomLabel();
   });
   socket.on('join-error', ({ code, message }) => toast(code === 'full' ? tr('err.roomFull') : message || tr('err.joinFailed'), true));
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    console.warn('[MikDrop] Server disconnected:', reason);
+    for (const t of transfers.values()) {
+      if (!TERMINAL.has(t.status)) { fail(t, 'err.connLost'); removeIncoming(t); }
+    }
     peers.clear();
     renderPeers();
     setStatus('off');
@@ -818,7 +822,7 @@
     $('#in-title').textContent = tr('in.title', { name: t.peerName, what: describeFiles(t.metas) });
     let sub = tr('in.sub', { n: t.metas.length, size: fmtBytes(t.total) });
     if (t.isFolder) sub += CAN_STREAM ? tr('in.folderDisk') : tr('in.folderZip');
-    else if (t.total >= STREAM_MIN) sub += CAN_STREAM ? tr('in.bigStream') : tr('in.bigRam');
+    else if (t.total >= STREAM_MIN) sub += CAN_STREAM ? tr('in.bigStream') : ' · ' + tr('err.largeNeedsDisk');
     $('#in-sub').textContent = sub;
 
     const pv = $('#in-previews');
@@ -853,6 +857,10 @@
     showIncoming();
     try { t.sink = await sinkPromise; } catch (err) {
       t.status = 'declined';
+      if (err.name !== 'AbortError') {
+        t.note = { k: err.message };
+        toast(tr(err.message), true);
+      }
       socket.emit('transfer-decline', { to: t.peerId, transferId: t.id });
       upsertCard(t);
       showIncoming();
@@ -945,7 +953,11 @@
 
   // Phải gọi ngay trong sự kiện bấm "Chấp nhận" vì hộp thoại chọn nơi lưu cần thao tác của người dùng
   async function chooseSink(t) {
-    if (!CAN_STREAM || (t.total < STREAM_MIN && !t.isFolder)) return null;
+    const needsDisk = t.total >= STREAM_MIN;
+    if (needsDisk && (!CAN_STREAM || ((t.isFolder || t.metas.length > 1) && !window.showDirectoryPicker))) {
+      throw new Error('err.largeNeedsDisk');
+    }
+    if (!CAN_STREAM || (!needsDisk && !t.isFolder)) return null;
     try {
       if (t.metas.length === 1 && !t.isFolder) return { kind: 'file', handle: await window.showSaveFilePicker({ suggestedName: t.metas[0].name }) };
       if (window.showDirectoryPicker) return { kind: 'dir', dir: await window.showDirectoryPicker({ mode: 'readwrite' }) };

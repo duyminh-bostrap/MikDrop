@@ -272,6 +272,6 @@ B --ack--> A
 ### Gửi thư mục và tệp lớn
 
 - Chọn **Thư mục (ZIP)** hoặc kéo thả thư mục: MikDrop tạo ZIP ở máy gửi, giữ đường dẫn bên trong. Trình duyệt có hỗ trợ raw DEFLATE sẽ nén dữ liệu; trình duyệt khác đóng gói ZIP không nén. ZIP tạo từ thư mục chưa hỗ trợ ZIP64 (mỗi tệp và offset phải nhỏ hơn 4 GiB).
-- Nhận tệp lớn trên Chrome/Edge qua HTTPS hoặc localhost: chọn nơi lưu để ghi trực tiếp ra đĩa. Huỷ hộp chọn sẽ từ chối gửi thay vì tự chuyển sang giữ toàn bộ tệp trong RAM. Trình duyệt không hỗ trợ ghi trực tiếp vẫn cần bộ nhớ đủ lớn.
+- Nhận tệp lớn trên Chrome/Edge qua HTTPS hoặc localhost: chọn nơi lưu để ghi trực tiếp ra đĩa. Huỷ hộp chọn sẽ từ chối gửi thay vì tự chuyển sang giữ toàn bộ tệp trong RAM. Trình duyệt không hỗ trợ ghi trực tiếp chỉ nhận tệp nhỏ; các lượt nhận từ 200 MiB trở lên bị từ chối để tránh sập tab do hết bộ nhớ.
 - Đường gửi thông thường chia dữ liệu theo khối; không chịu giới hạn HTTP upload 100 MB của Phím tắt iPhone trên Render. Hai phía nên tải lại trang để dùng cơ chế chờ ghi đĩa mới.
 - Kiểm tra ZIP và điều tiết luồng truyền: `node tests/transfer.cjs`.

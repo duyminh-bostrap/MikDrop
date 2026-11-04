@@ -422,7 +422,8 @@ function attachSignaling(io) {
       );
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
+      console.warn(`[socket] ${socket.id} disconnected: ${reason}`);
       share.onDisconnect(socket.id);
       const peer = peers.get(socket.id);
       if (peer) {

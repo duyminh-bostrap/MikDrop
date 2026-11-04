@@ -63,5 +63,36 @@ vm.runInContext(zipCode + '\nthis.buildZip = buildZip;', ctx);
   assert.equal(stored.readUInt16LE(8), 0);
   assert.equal(stored.readUInt32LE(14), 0xcbf43926);
   assert.equal(stored.subarray(39, 48).toString(), '123456789');
-  console.log('ZIP compression/store, Unicode, CRC, and transfer backpressure passed');
+  const sinkCode = source.slice(source.indexOf('  async function chooseSink'), source.indexOf('  async function uniqueFileHandle'));
+  const receiver = vm.createContext({ CAN_STREAM: false, STREAM_MIN: 200 * 1024 * 1024, window: {} });
+  vm.runInContext(sinkCode + '\nthis.chooseSink = chooseSink;', receiver);
+  const large = { total: 14122676536, isFolder: false, metas: [{ name: 'transfer.rar' }] };
+  await assert.rejects(receiver.chooseSink(large), /err.largeNeedsDisk/);
+  assert.equal(await receiver.chooseSink({ ...large, total: 1024 }), null);
+  receiver.CAN_STREAM = true;
+  const handle = { name: 'transfer.rar' };
+  receiver.window.showSaveFilePicker = async () => handle;
+  assert.equal((await receiver.chooseSink(large)).handle, handle);
+  await assert.rejects(receiver.chooseSink({ ...large, metas: [{}, {}] }), /err.largeNeedsDisk/);
+  receiver.window.showSaveFilePicker = async () => { throw new Error('disk unavailable'); };
+  await assert.rejects(receiver.chooseSink(large), /disk unavailable/);
+  const active = { status: 'receiving' };
+  const done = { status: 'done' };
+  let disconnect;
+  const failed = [];
+  const removed = [];
+  const connection = vm.createContext({
+    socket: { on(event, fn) { disconnect = fn; } }, console: { warn() {} },
+    transfers: new Map([['active', active], ['done', done]]), TERMINAL: new Set(['done']),
+    fail(t, reason) { failed.push([t, reason]); }, removeIncoming(t) { removed.push(t); },
+    peers: new Map([['peer', {}]]), renderPeers() {}, setStatus() {},
+  });
+  vm.runInContext(source.slice(source.indexOf("  socket.on('disconnect',"), source.indexOf("  socket.on('connect_error'")), connection);
+  disconnect('ping timeout');
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0][0], active);
+  assert.equal(failed[0][1], 'err.connLost');
+  assert.deepEqual(removed, [active]);
+  assert.equal(connection.peers.size, 0);
+  console.log('ZIP, backpressure, 14 GB disk guard, and disconnect cleanup passed');
 })().catch(err => { console.error(err); process.exitCode = 1; });
